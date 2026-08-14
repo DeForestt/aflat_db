@@ -75,6 +75,63 @@ export fn register() -> void {
             reopened_pager.close();
         });
 
+        test.it("updates records in place and grows them without changing slots", fn () {
+            const adr path = "/tmp/aflat-db-slotted-page-update-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+
+            page.initialize();
+            const int updated_slot = page.insert("original", 8)!;
+            const int retained_slot = page.insert("neighbor", 8)!;
+
+            test.assertTrue(page.update(updated_slot, "tiny", 4)!);
+            let smaller = page.read(updated_slot)!;
+            test.assertEqual(4, smaller.size);
+            test.assertTrue(slottedPageBytesEqual(
+                smaller.data, "tiny", 4));
+
+            test.assertTrue(page.update(
+                updated_slot, "a larger value", 14)!);
+            let larger = page.read(updated_slot)!;
+            let retained = page.read(retained_slot)!;
+            test.assertEqual(14, larger.size);
+            test.assertTrue(slottedPageBytesEqual(
+                larger.data, "a larger value", 14));
+            test.assertEqual(8, retained.size);
+            test.assertTrue(slottedPageBytesEqual(
+                retained.data, "neighbor", 8));
+
+            let updated_raw = page.release();
+            let __written = (run pager.writePage(updated_raw))!;
+            pager.close();
+
+            let reopened_pager = (run db.readDatabase(path))!;
+            let persisted_raw = (run reopened_pager.readPage(#1))!;
+            let persisted_page = new SlottedPage($persisted_raw);
+            let persisted = persisted_page.read(updated_slot)!;
+            test.assertEqual(14, persisted.size);
+            test.assertTrue(slottedPageBytesEqual(
+                persisted.data, "a larger value", 14));
+            reopened_pager.close();
+        });
+
+        test.it("rejects updates for invalid and deleted records", fn () {
+            const adr path = "/tmp/aflat-db-slotted-page-update-errors-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+
+            page.initialize();
+            const int slot = page.insert("record", 6)!;
+
+            test.assertTrue(page.update(-1, "value", 5).isErr());
+            test.assertTrue(page.update(slot, "", 0).isErr());
+            let __removed = page.remove(slot)!;
+            test.assertTrue(page.update(slot, "value", 5).isErr());
+            pager.close();
+        });
+
         test.it("reuses deleted slot IDs", fn () {
             const adr path = "/tmp/aflat-db-slotted-page-slot-reuse-test.db";
             let pager = (run db.createPager(path))!;

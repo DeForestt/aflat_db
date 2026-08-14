@@ -51,8 +51,20 @@ let row = new Row([
     db_value.Bool(true),
 ]);
 
-let __id = (await users.insert(row))
+let id = (await users.insert(row))
     .expect("unable to insert row");
+
+let updated_row = new Row([
+    db_value.Int(1),
+    db_value.Text(`James Thompson`),
+    db_value.Bool(true),
+]);
+
+(await users.update(id, updated_row))
+    .expect("unable to update row");
+
+let stored = (await users.read(id))
+    .expect("unable to read updated row");
 database.close();
 ```
 
@@ -66,7 +78,9 @@ let users = (await database.table(`users`))
 database.close();
 ```
 
-See `examples/basic.af` for the complete create, insert, reopen, and scan flow.
+`update` keeps the row's record ID stable and validates the replacement row
+against the table schema. See `examples/basic.af` for the complete create,
+insert, reopen, and scan flow.
 
 ## Development
 
@@ -77,4 +91,4 @@ aflat test
 ```
 
 The suite covers database creation, persistence, paging, table heaps, schemas,
-typed row codecs, catalogs, and scans.
+typed row codecs, updates, catalogs, and scans.

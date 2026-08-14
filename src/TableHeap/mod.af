@@ -109,6 +109,21 @@ unique class TableHeap {
         return true;
     };
 
+    async fn update(immutable RecordId id, immutable adr bytes, int size) -> bool! {
+      const LockGuard __guard =
+          await my.operationLock.guard();
+
+      let raw = (await my.pager.view().readPage(id.pageId))!;
+      let page = slotted.open($raw)!;
+
+      let __updated = page.update(id.slotId, bytes, size)!;
+
+      let updated_raw = page.release();
+      let __written = (await my.pager.view().writePage(updated_raw))!;
+
+      return true;
+    };
+
     async fn readRawPage(long pageId) -> Page! {
       return await my.pager.view().readPage(pageId);
     };

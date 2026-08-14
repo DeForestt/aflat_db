@@ -168,6 +168,47 @@ export fn register() -> void {
                 _ => { test.assertTrue(false); }
             };
         });
+
+        test.it("updates and reads a typed row by record ID", fn () {
+            let table = tableTestCreate(
+                "/tmp/aflat-db-table-update-test.db")!;
+            let original_row = tableTestRow(1, "Al", false);
+            let retained_row = tableTestRow(2, "Bobby", true);
+            let replacement_row = tableTestRow(
+                10, "Alexandra", true);
+            let id = (run table.insert(original_row))!;
+            let retained_id = (run table.insert(retained_row))!;
+
+            test.assertTrue((run table.update(
+                id, replacement_row))!);
+
+            let updated = (run table.read(id))!;
+            match updated.get(0)! {
+                Int(value) => { test.assertEqual(10, value); },
+                _ => { test.assertTrue(false); }
+            };
+            match updated.get(1)! {
+                Text(value) => {
+                    test.assertEqual(9, value.len());
+                    test.assertTrue(tableTestBytesEqual(
+                        value.cstr(), "Alexandra", 9));
+                },
+                _ => { test.assertTrue(false); }
+            };
+            match updated.get(2)! {
+                Bool(value) => { test.assertTrue(value); },
+                _ => { test.assertTrue(false); }
+            };
+
+            let retained = (run table.read(retained_id))!;
+            match retained.get(1)! {
+                Text(value) => {
+                    test.assertTrue(tableTestBytesEqual(
+                        value.cstr(), "Bobby", 5));
+                },
+                _ => { test.assertTrue(false); }
+            };
+        });
     });
     return;
 };

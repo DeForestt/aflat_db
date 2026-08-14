@@ -31,6 +31,11 @@ unique class Table {
     async fn remove(immutable RecordId id) -> bool! {
       return await my.heap.remove(id);
     };
+
+    async fn update(immutable RecordId id, immutable Row row) -> bool! {
+      let record = row_codec.encode(my.schema, row)!;
+      return await my.heap.update(id, record.data, record.size);
+    };
     
     fn scan() -> RowScan {
       let heap_scan = my.heap.scan();

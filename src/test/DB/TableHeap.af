@@ -291,6 +291,41 @@ export fn register() -> void {
             af_free(full_record);
         });
 
+        test.it("updates a record by ID and persists the new bytes", fn () {
+            const adr path = "/tmp/aflat-db-table-heap-update-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+            page.initialize();
+            let initialized_raw = page.release();
+            let __initialized = (run pager.writePage(initialized_raw))!;
+
+            let heap = new TableHeap($pager, #1);
+            let id = (run heap.insert("old", 3))!;
+            let retained_id = (run heap.insert("keep", 4))!;
+
+            test.assertTrue((run heap.update(
+                id, "a longer replacement", 20))!);
+
+            let updated = (run heap.read(id))!;
+            let retained = (run heap.read(retained_id))!;
+            test.assertEqual(20, updated.size);
+            test.assertTrue(tableHeapBytesEqual(
+                updated.data, "a longer replacement", 20));
+            test.assertEqual(4, retained.size);
+            test.assertTrue(tableHeapBytesEqual(
+                retained.data, "keep", 4));
+
+            let verifier = (run db.readDatabase(path))!;
+            let persisted_raw = (run verifier.readPage(id.pageId))!;
+            let persisted_page = new SlottedPage($persisted_raw);
+            let persisted = persisted_page.read(id.slotId)!;
+            test.assertEqual(20, persisted.size);
+            test.assertTrue(tableHeapBytesEqual(
+                persisted.data, "a longer replacement", 20));
+            verifier.close();
+        });
+
         test.it("removes a record by record ID", fn () {
             const adr path = "/tmp/aflat-db-table-heap-remove-test.db";
             let pager = (run db.createPager(path))!;

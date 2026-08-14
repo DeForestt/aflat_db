@@ -30,6 +30,43 @@ unique class SlottedPage {
         return my;
     };
 
+    private fn writeRecordForSlot(int slot_id, immutable adr bytes, int size) -> bool! {
+        if my.freeSpace() < size {
+            return new Error("Not enough room");
+        };
+
+        const int record_offset = my.freeEnd() - size;
+
+        af_memcpy(
+            my.page.data + record_offset,
+            bytes,
+            size
+        );
+
+        const int slot_offset =
+            my.HEADER_SIZE + (slot_id * my.SLOT_SIZE);
+
+        af_memcpy(
+            my.page.data + slot_offset,
+            ?record_offset,
+            4
+        );
+
+        af_memcpy(
+            my.page.data + slot_offset + 4,
+            ?size,
+            4
+        );
+
+        af_memcpy(
+            my.page.data + 12,
+            ?record_offset,
+            4
+        );
+
+        return true;
+    };
+
     fn initialize() -> void {
       long nextPage = -1;
       int slotCount = 0;
@@ -185,6 +222,37 @@ unique class SlottedPage {
         af_memcpy(my.page.data + slot_offset, ?deleted_offset, 4);
         af_memcpy(my.page.data + slot_offset + 4, ?deleted_size, 4);
         return true;
+    };
+
+    fn update(int slot_id, immutable adr bytes, int size) -> bool! {
+      if (slot_id < 0) | (slot_id >= my.slotCount()) {
+        return new Error("Invalid slot ID");
+      };
+
+      let slot_offset = my.HEADER_SIZE + (slot_id * my.SLOT_SIZE);
+
+      int old_offset = 0;
+      int old_size = 0;
+
+      af_memcpy(?old_offset, my.page.data + slot_offset, 4);
+      af_memcpy(?old_size, my.page.data + slot_offset + 4, 4);
+
+      if old_offset < 0 {
+        return new Error("Record has been deleted");
+      };
+
+      if size <= 0 {
+         return new Error("Cannot update with an empty record");
+      };
+
+      if size <= old_size {
+        af_memcpy(my.page.data + old_offset, bytes, size);
+        af_memcpy(my.page.data + slot_offset + 4, ?size, 4);
+        return true;
+      } else {
+        let written = my.writeRecordForSlot(slot_id, bytes, size)!;
+        return written;
+      };
     };
 
     fn release() -> Page {
