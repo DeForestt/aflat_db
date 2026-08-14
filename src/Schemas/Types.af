@@ -1,0 +1,87 @@
+.needs<std>
+import uni_string from "uni_string";
+import {resultWrapper} from "Utils/result";
+import Error from "Utils/Error";
+
+union DBType {
+    Int,
+    Long,
+    Float,
+    Bool,
+    Text
+
+    safe fn isInt() -> bool {
+      match my {
+        Int => return true,
+        _ => return false
+      };
+    };
+
+    safe fn isLong() -> bool {
+      match my {
+        Long => return true,
+        _ => return false
+      };
+    };
+
+    safe fn isFloat() -> bool {
+      match my {
+        Float => return true,
+        _ => return false
+      };
+    };
+
+    safe fn isBool() -> bool {
+      match my {
+        Bool => return true,
+        _ => return false
+      };
+    };
+
+    safe fn isText() -> bool {
+      match my {
+        Text => return true,
+        _ => return false
+      };
+    };
+
+    safe fn toTypeTag() -> int {
+      match my {
+        Int => return 0,
+        Long => return 2,
+        Float => return 3,
+        Bool => return 4,
+        Text => return 5
+      };
+    };
+};
+
+export fn Int() -> DBType {
+  return new DBType->Int(); 
+};
+
+export fn Long() -> DBType {
+  return new DBType->Long();
+};
+
+export fn Float() -> DBType {
+  return new DBType->Float();
+};
+
+export fn Bool() -> DBType {
+  return new DBType->Bool();
+};
+
+export fn Text() -> DBType {
+  return new DBType->Text();
+};
+
+export fn fromTypeTag(int tag) -> DBType! {
+  if tag == 0 return Int();
+  if tag == 2 return Long();
+  if tag == 3 return Float();
+  if tag == 4 return Bool();
+  if tag == 5 return Text();
+
+  return new Error("Malformed Type Tag");
+};

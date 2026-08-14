@@ -1,0 +1,11 @@
+.needs <std>
+import RecordId, Record from "../Record";
+
+unique class HeapRecord {
+    RecordId id = id;
+    Record record = $record;
+
+    fn init(RecordId id, Record &&record) -> Self {
+        return my;
+    };
+};

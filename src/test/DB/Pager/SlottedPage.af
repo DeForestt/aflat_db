@@ -1,0 +1,183 @@
+.needs <std>
+.needs <test>
+.needs <asm.gs>
+
+import {describe, it, assertEqual, assertTrue} from "ATest" under test;
+import {createPager, readDatabase} from "../../../Storage" under db;
+import SlottedPage from "../../../Pager/SlottedPage";
+
+fn slottedPageBytesEqual(immutable adr actual, immutable adr expected, int size) -> bool {
+    mutable int index = 0;
+    mutable adr actual_cursor = actual;
+    mutable adr expected_cursor = expected;
+    while index < size {
+        if (actual_cursor as char) != (expected_cursor as char) {
+            return false;
+        };
+        actual_cursor = actual_cursor + 1;
+        expected_cursor = expected_cursor + 1;
+        index = index + 1;
+    };
+    return true;
+};
+export fn register() -> void {
+    test.describe("Slotted pages", fn () {
+        test.it("inserts records and reads them by slot ID", fn () {
+            const adr path = "/tmp/aflat-db-slotted-page-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+
+            page.initialize();
+
+            const int first_slot = page.insert("hello", 5)!;
+            const int second_slot = page.insert("database", 8)!;
+
+            test.assertEqual(0, first_slot);
+            test.assertEqual(1, second_slot);
+            test.assertEqual(2, page.slotCount());
+
+            let first = page.read(0)!;
+            let second = page.read(1)!;
+
+            test.assertEqual(5, first.size);
+            test.assertTrue(slottedPageBytesEqual(first.data, "hello", 5));
+            test.assertEqual(8, second.size);
+            test.assertTrue(slottedPageBytesEqual(second.data, "database", 8));
+            pager.close();
+        });
+
+        test.it("persists records through the pager", fn () {
+            const adr path = "/tmp/aflat-db-slotted-page-persistence-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+
+            page.initialize();
+            let __first_slot = page.insert("hello", 5)!;
+            let __second_slot = page.insert("database", 8)!;
+
+            let updated_raw = page.release();
+            let __written = (run pager.writePage(updated_raw))!;
+            pager.close();
+
+            let reopened_pager = (run db.readDatabase(path))!;
+            let persisted_raw = (run reopened_pager.readPage(#1))!;
+            let persisted_page = new SlottedPage($persisted_raw);
+            let first = persisted_page.read(0)!;
+            let second = persisted_page.read(1)!;
+
+            test.assertEqual(2, persisted_page.slotCount());
+            test.assertEqual(5, first.size);
+            test.assertTrue(slottedPageBytesEqual(first.data, "hello", 5));
+            test.assertEqual(8, second.size);
+            test.assertTrue(slottedPageBytesEqual(second.data, "database", 8));
+            reopened_pager.close();
+        });
+
+        test.it("reuses deleted slot IDs", fn () {
+            const adr path = "/tmp/aflat-db-slotted-page-slot-reuse-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+
+            page.initialize();
+            const int first_slot = page.insert("hello", 5)!;
+            const int second_slot = page.insert("database", 8)!;
+            let __removed = page.remove(first_slot)!;
+            const int reused_slot = page.insert("again", 5)!;
+
+            test.assertEqual(0, first_slot);
+            test.assertEqual(1, second_slot);
+            test.assertEqual(first_slot, reused_slot);
+            test.assertEqual(2, page.slotCount());
+
+            let replacement = page.read(reused_slot)!;
+            let retained = page.read(second_slot)!;
+            test.assertEqual(5, replacement.size);
+            test.assertTrue(slottedPageBytesEqual(replacement.data, "again", 5));
+            test.assertEqual(8, retained.size);
+            test.assertTrue(slottedPageBytesEqual(retained.data, "database", 8));
+            pager.close();
+        });
+
+        test.it("initializes and persists the next page ID", fn () {
+            const adr path = "/tmp/aflat-db-slotted-page-next-page-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+
+            page.initialize();
+            const long no_next_page = -1;
+            test.assertEqual(no_next_page, page.nextPage());
+            page.setNextPage(#42);
+            test.assertEqual(#42, page.nextPage());
+
+            let updated_raw = page.release();
+            let __written = (run pager.writePage(updated_raw))!;
+            pager.close();
+
+            let reopened_pager = (run db.readDatabase(path))!;
+            let persisted_raw = (run reopened_pager.readPage(#1))!;
+            let persisted_page = new SlottedPage($persisted_raw);
+
+            test.assertEqual(#42, persisted_page.nextPage());
+            test.assertEqual(0, persisted_page.slotCount());
+            test.assertEqual(4096 - 16, persisted_page.freeSpace());
+            reopened_pager.close();
+        });
+
+        test.it("compacts live records and reclaims deleted record space", fn () {
+            const adr path = "/tmp/aflat-db-slotted-page-compact-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+
+            page.initialize();
+            page.setNextPage(#42);
+            const int first_slot = page.insert("alpha", 5)!;
+            const int deleted_slot = page.insert("remove-me", 9)!;
+            const int last_slot = page.insert("omega", 5)!;
+            const int free_space_before = page.freeSpace();
+            let __removed = page.remove(deleted_slot)!;
+
+            const int reclaimed = page.compact()!;
+
+            test.assertEqual(9, reclaimed);
+            test.assertEqual(free_space_before + 9, page.freeSpace());
+            test.assertEqual(3, page.slotCount());
+            test.assertEqual(#42, page.nextPage());
+            test.assertTrue(page.read(deleted_slot).isErr());
+
+            let first = page.read(first_slot)!;
+            let last = page.read(last_slot)!;
+            test.assertEqual(5, first.size);
+            test.assertTrue(slottedPageBytesEqual(first.data, "alpha", 5));
+            test.assertEqual(5, last.size);
+            test.assertTrue(slottedPageBytesEqual(last.data, "omega", 5));
+
+            const int reused_slot = page.insert("new", 3)!;
+            test.assertEqual(deleted_slot, reused_slot);
+            test.assertEqual(3, page.slotCount());
+
+            let updated_raw = page.release();
+            let __written = (run pager.writePage(updated_raw))!;
+            pager.close();
+
+            let reopened_pager = (run db.readDatabase(path))!;
+            let persisted_raw = (run reopened_pager.readPage(#1))!;
+            let persisted_page = new SlottedPage($persisted_raw);
+            let persisted_first = persisted_page.read(first_slot)!;
+            let persisted_replacement = persisted_page.read(reused_slot)!;
+            let persisted_last = persisted_page.read(last_slot)!;
+
+            test.assertEqual(#42, persisted_page.nextPage());
+            test.assertEqual(3, persisted_page.slotCount());
+            test.assertTrue(slottedPageBytesEqual(persisted_first.data, "alpha", 5));
+            test.assertTrue(slottedPageBytesEqual(persisted_replacement.data, "new", 3));
+            test.assertTrue(slottedPageBytesEqual(persisted_last.data, "omega", 5));
+            reopened_pager.close();
+        });
+    });
+    return;
+};

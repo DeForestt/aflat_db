@@ -1,0 +1,5 @@
+bin/
+.agents/
+.cache/
+*.db
+*.s

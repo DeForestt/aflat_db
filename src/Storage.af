@@ -1,0 +1,134 @@
+.needs <std>
+.needs <asm.gs>
+
+import File from "files";
+import {createFile, openFile} from "files" under fs;
+import DBHeader from "./DBFile";
+import Pager from "./Pager";
+import Error from "Utils/Error";
+import {create} from "./Pager/SlottedPage" under slotted;
+
+/**
+ * Create a new database containing its header and first data page.
+ *
+ * Page zero is reserved for the database header.  The first data page has ID
+ * one, so a newly-created database has a pageCount of two.
+ */
+export async fn createPager(const adr path) -> Pager! {
+    let file = fs.createFile(path)!;
+    let header = new DBHeader();
+    let pager = new Pager($file, $header);
+    let catalog_page_raw = (await pager.allocatePage())!;
+    let catalog_page = slotted.create($catalog_page_raw)!;
+    let initialized_catalog_page = catalog_page.release();
+    let __written = (await pager.writePage(initialized_catalog_page))!;
+    return pager;
+};
+
+/**
+ * Open an existing database, validate its serialized header, and return a
+ * live pager configured from that header.
+ */
+export async fn readDatabase(const adr path) -> Pager! {
+    let file = fs.openFile(path)!;
+    let header = new DBHeader();
+    let pager = new Pager($file, $header);
+  
+    let header_result = await pager.readHeader();
+    if header_result.isErr() {
+        pager.close();
+        return header_result.unwrapErr();
+    };
+
+    return pager;
+};
+
+/**
+ * Verify the complete on-disk shape of a newly-created database.
+ */
+export async fn verifyDatabase(const adr path) -> bool! {
+    const int header_size = 40;
+    const int expected_file_size = 8192;
+    let file = fs.openFile(path)!;
+
+    const long file_size = sys_lseek(file.file, #0, 2);
+    file.rewind();
+    if file_size != expected_file_size {
+        file.close();
+        return new Error("Invalid database file size");
+    };
+
+    const adr bytes = af_malloc(expected_file_size);
+    const long bytes_read = await file.readBytesAtAsync(
+        bytes, expected_file_size, #0);
+    file.close();
+    if bytes_read != expected_file_size {
+        af_free(bytes);
+        return new Error("Unable to read the complete database file");
+    };
+
+    const long magic;
+    const int version;
+    const int page_size;
+    const long page_count;
+    const long catalog_page;
+    const long free_list_page;
+    af_memcpy(?magic,          bytes,      8);
+    af_memcpy(?version,        bytes + 8,  4);
+    af_memcpy(?page_size,      bytes + 12, 4);
+    af_memcpy(?page_count,     bytes + 16, 8);
+    af_memcpy(?catalog_page,   bytes + 24, 8);
+    af_memcpy(?free_list_page, bytes + 32, 8);
+
+    let expected_header = new DBHeader();
+    if (magic != expected_header.magic) |
+       (version != expected_header.version) |
+       (page_size != expected_header.pageSize) |
+       (page_count != #2) |
+       (catalog_page != expected_header.catalogPage) |
+       (free_list_page != expected_header.freeListPage) {
+        af_free(bytes);
+        return new Error("Invalid database header");
+    };
+
+    // The unused part of page zero must be clean.
+    mutable int index = header_size;
+    mutable adr cursor = bytes + header_size;
+    while index < 4096 {
+        if (cursor as char) != '\0' {
+            af_free(bytes);
+            return new Error("Unused database header bytes must be zero-filled");
+        };
+        cursor = cursor + 1;
+        index = index + 1;
+    };
+
+    // Page one is the initialized, empty catalog heap.
+    const long catalog_next_page;
+    const int catalog_slot_count;
+    const int catalog_free_end;
+    af_memcpy(?catalog_next_page, bytes + 4096, 8);
+    af_memcpy(?catalog_slot_count, bytes + 4104, 4);
+    af_memcpy(?catalog_free_end, bytes + 4108, 4);
+    if (catalog_next_page != -1) |
+       (catalog_slot_count != 0) |
+       (catalog_free_end != 4096) {
+        af_free(bytes);
+        return new Error("Invalid catalog page header");
+    };
+
+    index = 4112;
+    cursor = bytes + 4112;
+    while index < expected_file_size {
+        if (cursor as char) != '\0' {
+            af_free(bytes);
+            return new Error("Unused catalog page bytes must be zero-filled");
+        };
+        cursor = cursor + 1;
+        index = index + 1;
+    };
+
+    af_free(bytes);
+    return true;
+};
+

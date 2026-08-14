@@ -1,0 +1,267 @@
+.needs <std>
+import TableSchema, ColumnSchema from "../Schemas";
+import DBValue from "../DBValue";
+import {Null, Int, Long, Float, Bool, Text} from "../DBValue" under db_value;
+import Row from "../Row";
+import Record, RecordView from "../Record";
+import Error from "Utils/Error";
+import vector from "Collections/Vector";
+import uni_string from "uni_string";
+
+
+private fn encodedSize(immutable TableSchema schema, immutable Row row) -> int! {
+  if row.count() != schema.columnCount()
+    return new Error("Row does not match TableSchema");
+
+  mutable int size = 4; // size for the column count line
+  
+  for int i = 0; i < schema.columnCount(); i++ {
+    size = size + 1; // add size of null flag
+    let value = row.get(i)!;
+    let column = schema.column(i)!.view();
+    
+    match value {
+      Null => {
+        if !column.nullable {
+          return new Error("Column Cannot be Null");
+        };
+      },
+
+      Int => {
+        if !column.type.isInt() {
+          return new Error("Row Value does not match schema");
+        };
+        size = size + 4;
+      },
+
+      Long => {
+        if !column.type.isLong() {
+          return new Error("Row Value does not match schema");
+        };
+        size = size + 8;
+      },
+
+      Float => {
+        if !column.type.isFloat() {
+          return new Error("Row Value does not match schema");
+        };
+        size = size + 4;
+      },
+
+      Bool => {
+        if !column.type.isBool() {
+          return new Error("Row Value does not match schema");
+        };
+        size = size + 1;
+      },
+
+      Text(value) => {
+        if !column.type.isText() {
+          return new Error("Row Value does not match schema");
+        };
+        size = size + 4 + value.len();
+      }
+    };
+  };
+
+  return size;
+};
+
+export fn encode(immutable TableSchema schema, immutable Row row) -> Record! {
+  let size = encodedSize(schema, row)!;
+  let bytes = af_malloc(size);
+  mutable let cursor = bytes;
+  
+  let column_count = schema.columnCount();
+
+  af_memcpy(cursor, ?column_count, 4);
+  cursor = cursor + 4;
+
+  for int i = 0; i < column_count; i++ {
+    let value = row.get(i)!;
+
+    match value {
+      Null => {
+        let is_null = true;
+        af_memcpy(cursor, ?is_null, 1);
+        cursor = cursor + 1;
+      },
+
+      Int(v) => {
+        let is_null = false;
+        af_memcpy(cursor, ?is_null, 1);
+        cursor = cursor + 1;
+
+        af_memcpy(cursor, ?v, 4);
+        cursor = cursor + 4;
+      },
+
+      Long(v) => {
+        let is_null = false;
+        af_memcpy(cursor, ?is_null, 1);
+        cursor = cursor + 1;
+
+        af_memcpy(cursor, ?v, 8);
+        cursor = cursor + 8;
+      },
+
+      Float(v) => {
+        let is_null = false;
+        af_memcpy(cursor, ?is_null, 1);
+        cursor = cursor + 1;
+
+        af_memcpy(cursor, ?v, 4);
+        cursor = cursor + 4;
+      },
+
+      Bool(v) => {
+        let is_null = false;
+        af_memcpy(cursor, ?is_null, 1);
+        cursor = cursor + 1;
+
+        af_memcpy(cursor, ?v, 1);
+        cursor = cursor + 1;
+      },
+
+      Text(v) => {
+        let is_null = false;
+        af_memcpy(cursor, ?is_null, 1);
+        cursor = cursor + 1;
+
+        let text_size = v.len();
+        af_memcpy(cursor, ?text_size, 4);
+        cursor = cursor + 4;
+        af_memcpy(cursor, v.cstr(), text_size);
+        cursor = cursor + text_size;
+      }
+    };
+  };
+  
+  // eventually this will need to be re-written because this will re-allocate and copy the bites befor freeing them, best that we just sell the bytes pointer from here.
+  let record = new Record(new RecordView(bytes, size));
+  af_free(bytes);
+  return record;
+};
+
+export fn decode(immutable TableSchema schema, immutable Record record) -> Row! {
+  if record.size < 4
+    return new Error("Invalid Row Record");
+
+    mutable adr cursor = record.data;
+    mutable let remaining = record.size;
+    
+    int column_count = 0; // this allocates an int on the stack
+    af_memcpy(?column_count, cursor, 4); // copy the actual column_count into the stack
+    cursor = cursor + 4;
+    remaining = remaining - 4;
+
+    if column_count != schema.columnCount() {
+      return new Error("Row does not match table schema");
+    };
+
+    let values = new vector::<DBValue>(column_count);
+
+    for int i = 0; i < column_count; i++ {
+      if remaining < 1 {
+        return new Error("Truncated row");
+      };
+
+      bool is_null = false;
+      af_memcpy(?is_null, cursor, 1);
+      cursor = cursor + 1;
+      remaining = remaining - 1;
+
+      let column = schema.column(i)!.view();
+      if is_null {
+        if !column.nullable {
+          return new Error("Null value in non-nullable column");
+        };
+
+        values.push_back(db_value.Null());
+        continue;
+      };
+
+
+      match column.type {
+        Int => {
+          if remaining < 4 {
+            return new Error("Truncated int value");
+          };
+
+          int v = 0;
+          af_memcpy(?v, cursor, 4);
+          cursor = cursor + 4;
+          remaining = remaining - 4;
+          values.push_back(db_value.Int(v));
+        },
+
+        Long => {
+          if remaining < 8 {
+            return new Error("Truncated long value");
+          };
+
+          long v = 0;
+          af_memcpy(?v, cursor, 8);
+          cursor = cursor + 8;
+          remaining = remaining - 8;
+          values.push_back(db_value.Long(v));
+        },
+
+        Float => {
+          if remaining < 4 {
+            return new Error("Truncated float value");
+          };
+
+          float v = 0.0;
+          af_memcpy(?v, cursor, 4);
+          cursor = cursor + 4;
+          remaining = remaining - 4;
+          values.push_back(db_value.Float(v));
+        },
+
+        Bool => {
+          if remaining < 1 {
+            return new Error("Truncated bool value");
+          };
+
+          bool v = false;
+          af_memcpy(?v, cursor, 1);
+          cursor = cursor + 1;
+          remaining = remaining - 1;
+          values.push_back(db_value.Bool(v));
+        },
+
+        Text => {
+          if remaining < 4 {
+            return new Error("Truncated text length");
+          };
+
+          int text_size = 0;
+          af_memcpy(?text_size, cursor, 4);
+          cursor = cursor + 4;
+          remaining = remaining - 4;
+
+          if (text_size < 0) | (remaining < text_size) {
+            return new Error("Truncated text value");
+          };
+
+          let text_bytes = af_malloc(text_size + 1);
+          af_memcpy(text_bytes, cursor, text_size);
+          (text_bytes + text_size) =: '\0';
+
+          let text = new uni_string(text_bytes);
+          af_free(text_bytes);
+          cursor = cursor + text_size;
+          remaining = remaining - text_size;
+          values.push_back(db_value.Text(text));
+        }
+      };
+    };
+
+    if remaining != 0 {
+      return new Error("Invalid trailing row data");
+    };
+
+    let row = new Row($values);
+    return row;
+};

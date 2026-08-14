@@ -1,0 +1,317 @@
+.needs <std>
+.needs <test>
+.needs <asm.gs>
+
+import {describe, it, assertEqual, assertTrue} from "ATest" under test;
+import {createPager, readDatabase} from "../../Storage" under db;
+import SlottedPage from "../../Pager/SlottedPage";
+import TableHeap from "../../TableHeap";
+
+fn tableHeapBytesEqual(immutable adr actual, immutable adr expected, int size) -> bool {
+    mutable int index = 0;
+    mutable adr actual_cursor = actual;
+    mutable adr expected_cursor = expected;
+    while index < size {
+        if (actual_cursor as char) != (expected_cursor as char) {
+            return false;
+        };
+        actual_cursor = actual_cursor + 1;
+        expected_cursor = expected_cursor + 1;
+        index = index + 1;
+    };
+    return true;
+};
+export fn register() -> void {
+    test.describe("Table heap insertion", fn () {
+        test.it("inserts into the first page and returns its record ID", fn () {
+            const adr path = "/tmp/aflat-db-table-heap-first-page-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+            page.initialize();
+            let initialized_raw = page.release();
+            let __initialized = (run pager.writePage(initialized_raw))!;
+
+            let heap = new TableHeap($pager, #1);
+            let id = (run heap.insert("hello", 5))!;
+
+            test.assertEqual(#1, id.pageId);
+            test.assertEqual(0, id.slotId);
+
+            let verifier = (run db.readDatabase(path))!;
+            let persisted_raw = (run verifier.readPage(#1))!;
+            let persisted_page = new SlottedPage($persisted_raw);
+            let persisted_record = persisted_page.read(0)!;
+
+            const long no_next_page = -1;
+            test.assertEqual(no_next_page, persisted_page.nextPage());
+            test.assertEqual(1, persisted_page.slotCount());
+            test.assertEqual(5, persisted_record.size);
+            test.assertTrue(tableHeapBytesEqual(persisted_record.data, "hello", 5));
+            verifier.close();
+        });
+
+        test.it("compacts and retries before allocating another page", fn () {
+            const adr path = "/tmp/aflat-db-table-heap-compact-retry-test.db";
+            const int large_size = 2000;
+            const adr bytes = af_malloc(large_size);
+            mutable adr cursor = bytes;
+            mutable int index = 0;
+            while index < large_size {
+                cursor =: 'A';
+                cursor = cursor + 1;
+                index = index + 1;
+            };
+
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+            page.initialize();
+            let initialized_raw = page.release();
+            let __initialized = (run pager.writePage(initialized_raw))!;
+
+            let heap = new TableHeap($pager, #1);
+            let deleted_id = (run heap.insert(bytes, large_size))!;
+
+            cursor = bytes;
+            index = 0;
+            while index < large_size {
+                cursor =: 'B';
+                cursor = cursor + 1;
+                index = index + 1;
+            };
+            let retained_id = (run heap.insert(bytes, large_size))!;
+            test.assertTrue((run heap.remove(deleted_id))!);
+
+            const int replacement_size = 1000;
+            cursor = bytes;
+            index = 0;
+            while index < replacement_size {
+                cursor =: 'R';
+                cursor = cursor + 1;
+                index = index + 1;
+            };
+            let replacement_id =
+                (run heap.insert(bytes, replacement_size))!;
+
+            test.assertEqual(#1, replacement_id.pageId);
+            test.assertEqual(deleted_id.slotId, replacement_id.slotId);
+            test.assertEqual(#1, retained_id.pageId);
+
+            let replacement = (run heap.read(replacement_id))!;
+            let retained = (run heap.read(retained_id))!;
+            test.assertEqual(replacement_size, replacement.size);
+            test.assertTrue(tableHeapBytesEqual(replacement.data, bytes,
+                                       replacement_size));
+            test.assertEqual(large_size, retained.size);
+            mutable bool retained_matches = true;
+            cursor = retained.data;
+            index = 0;
+            while index < large_size {
+                if (cursor as char) != 'B' {
+                    retained_matches = false;
+                };
+                cursor = cursor + 1;
+                index = index + 1;
+            };
+            test.assertTrue(retained_matches);
+
+            let verifier = (run db.readDatabase(path))!;
+            let persisted_raw = (run verifier.readPage(#1))!;
+            let persisted_page = new SlottedPage($persisted_raw);
+            const long no_next_page = -1;
+            test.assertEqual(no_next_page, persisted_page.nextPage());
+            test.assertEqual(2, persisted_page.slotCount());
+            test.assertTrue((run verifier.readPage(#2)).isErr());
+            verifier.close();
+            af_free(bytes);
+        });
+
+        test.it("allocates, links, and follows an overflow page", fn () {
+            const adr path = "/tmp/aflat-db-table-heap-overflow-test.db";
+            const int full_record_size = 4096 - 16 - 8;
+            const adr full_record = af_malloc(full_record_size);
+            mutable adr cursor = full_record;
+            mutable int index = 0;
+            while index < full_record_size {
+                cursor =: 'F';
+                cursor = cursor + 1;
+                index = index + 1;
+            };
+
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+            page.initialize();
+            let initialized_raw = page.release();
+            let __initialized = (run pager.writePage(initialized_raw))!;
+
+            let heap = new TableHeap($pager, #1);
+            let first_id = (run heap.insert(full_record, full_record_size))!;
+            let overflow_id = (run heap.insert("overflow", 8))!;
+            let followed_id = (run heap.insert("follow", 6))!;
+            af_free(full_record);
+
+            test.assertEqual(#1, first_id.pageId);
+            test.assertEqual(0, first_id.slotId);
+            test.assertEqual(#2, overflow_id.pageId);
+            test.assertEqual(0, overflow_id.slotId);
+            test.assertEqual(#2, followed_id.pageId);
+            test.assertEqual(1, followed_id.slotId);
+
+            let verifier = (run db.readDatabase(path))!;
+            let first_raw = (run verifier.readPage(#1))!;
+            let first_page = new SlottedPage($first_raw);
+            test.assertEqual(#2, first_page.nextPage());
+            test.assertEqual(1, first_page.slotCount());
+            test.assertEqual(0, first_page.freeSpace());
+
+            let overflow_raw = (run verifier.readPage(#2))!;
+            let overflow_page = new SlottedPage($overflow_raw);
+            let overflow_record = overflow_page.read(0)!;
+            let followed_record = overflow_page.read(1)!;
+            const long no_next_page = -1;
+
+            test.assertEqual(no_next_page, overflow_page.nextPage());
+            test.assertEqual(2, overflow_page.slotCount());
+            test.assertEqual(8, overflow_record.size);
+            test.assertTrue(tableHeapBytesEqual(overflow_record.data, "overflow", 8));
+            test.assertEqual(6, followed_record.size);
+            test.assertTrue(tableHeapBytesEqual(followed_record.data, "follow", 6));
+            verifier.close();
+        });
+
+        test.it("serializes concurrent inserts across overflow pages", fn () {
+            const adr path = "/tmp/aflat-db-table-heap-concurrent-test.db";
+            const int record_size = 1000;
+            const adr bytes = af_malloc(record_size);
+            mutable adr cursor = bytes;
+            mutable int index = 0;
+            while index < record_size {
+                cursor =: 'C';
+                cursor = cursor + 1;
+                index = index + 1;
+            };
+
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+            page.initialize();
+            let initialized_raw = page.release();
+            let __initialized = (run pager.writePage(initialized_raw))!;
+            let heap = new TableHeap($pager, #1);
+
+            const let insertion_0 =
+                spawn heap.insert(bytes, record_size);
+            const let insertion_1 =
+                spawn heap.insert(bytes, record_size);
+            const let insertion_2 =
+                spawn heap.insert(bytes, record_size);
+            const let insertion_3 =
+                spawn heap.insert(bytes, record_size);
+            const let insertion_4 =
+                spawn heap.insert(bytes, record_size);
+            const let insertion_5 =
+                spawn heap.insert(bytes, record_size);
+            const let insertion_6 =
+                spawn heap.insert(bytes, record_size);
+            const let insertion_7 =
+                spawn heap.insert(bytes, record_size);
+
+            let __id_0 = (run insertion_0)!;
+            let __id_1 = (run insertion_1)!;
+            let __id_2 = (run insertion_2)!;
+            let __id_3 = (run insertion_3)!;
+            let __id_4 = (run insertion_4)!;
+            let __id_5 = (run insertion_5)!;
+            let __id_6 = (run insertion_6)!;
+            let __id_7 = (run insertion_7)!;
+
+            let verifier = (run db.readDatabase(path))!;
+            let first_raw = (run verifier.readPage(#1))!;
+            let first_page = new SlottedPage($first_raw);
+            let second_raw = (run verifier.readPage(#2))!;
+            let second_page = new SlottedPage($second_raw);
+            const long no_next_page = -1;
+
+            test.assertEqual(#2, first_page.nextPage());
+            test.assertEqual(4, first_page.slotCount());
+            test.assertEqual(no_next_page, second_page.nextPage());
+            test.assertEqual(4, second_page.slotCount());
+            test.assertTrue((run verifier.readPage(#3)).isErr());
+
+            for int slot_id = 0; slot_id < 4; slot_id++ {
+                let first_record = first_page.read(slot_id)!;
+                let second_record = second_page.read(slot_id)!;
+                test.assertEqual(record_size, first_record.size);
+                test.assertEqual(record_size, second_record.size);
+                test.assertTrue((first_record.data as char) == 'C');
+                test.assertTrue((second_record.data as char) == 'C');
+            };
+
+            verifier.close();
+            af_free(bytes);
+        });
+
+        test.it("reads records across heap pages by record ID", fn () {
+            const adr path = "/tmp/aflat-db-table-heap-read-test.db";
+            const int full_record_size = 4096 - 16 - 8;
+            const adr full_record = af_malloc(full_record_size);
+            mutable adr cursor = full_record;
+            mutable int index = 0;
+            while index < full_record_size {
+                cursor =: 'F';
+                cursor = cursor + 1;
+                index = index + 1;
+            };
+
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+            page.initialize();
+            let initialized_raw = page.release();
+            let __initialized = (run pager.writePage(initialized_raw))!;
+
+            let heap = new TableHeap($pager, #1);
+            let first_id = (run heap.insert(full_record, full_record_size))!;
+            let overflow_id = (run heap.insert("overflow", 8))!;
+            let followed_id = (run heap.insert("follow", 6))!;
+
+            let first = (run heap.read(first_id))!;
+            let overflow = (run heap.read(overflow_id))!;
+            let followed = (run heap.read(followed_id))!;
+
+            test.assertEqual(full_record_size, first.size);
+            test.assertTrue(tableHeapBytesEqual(first.data, full_record,
+                                       full_record_size));
+            test.assertEqual(8, overflow.size);
+            test.assertTrue(tableHeapBytesEqual(overflow.data, "overflow", 8));
+            test.assertEqual(6, followed.size);
+            test.assertTrue(tableHeapBytesEqual(followed.data, "follow", 6));
+            af_free(full_record);
+        });
+
+        test.it("removes a record by record ID", fn () {
+            const adr path = "/tmp/aflat-db-table-heap-remove-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.readPage(#1))!;
+            let page = new SlottedPage($raw);
+            page.initialize();
+            let initialized_raw = page.release();
+            let __initialized = (run pager.writePage(initialized_raw))!;
+
+            let heap = new TableHeap($pager, #1);
+            let id = (run heap.insert("delete me", 9))!;
+
+            test.assertTrue((run heap.remove(id))!);
+            test.assertTrue((run heap.read(id)).isErr());
+            test.assertTrue((run heap.remove(id)).isErr());
+
+            let replacement = (run heap.insert("after error", 11))!;
+            let record = (run heap.read(replacement))!;
+            test.assertEqual(11, record.size);
+            test.assertTrue(tableHeapBytesEqual(record.data, "after error", 11));
+        });
+    });
+    return;
+};

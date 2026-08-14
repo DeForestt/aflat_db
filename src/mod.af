@@ -1,0 +1,106 @@
+.needs <std>
+
+import Pager from "./Pager";
+import TableHeap from "./TableHeap";
+import Catalog from "./TableCatalog";
+import TableCatalogEntry from "./TableCatalog";
+import Table from "./Table";
+import TableSchema from "./Schemas";
+import {create} from "./Pager/SlottedPage" under slotted;
+import uni_string from "uni_string";
+import Error from "Utils/Error";
+import {createPager, readDatabase} from "./Storage" under db;
+
+unique class Database {
+    private Pager pager = $pager;
+
+    fn init(Pager &&pager) -> Self {
+        return my;
+    };
+
+    safe fn catalogPage() -> long {
+      return my.pager.catalogPage();
+    };
+
+    async fn table(immutable uni_string name) -> Table! {
+      let catalog_heap = new TableHeap(my.pager, my.catalogPage());
+
+      let catalog = new Catalog($catalog_heap);
+
+      let entry = (await catalog.findTable(name.cstr(), name.len()))!;
+
+      let table_heap = new TableHeap(my.pager, entry.firstPage);
+      let table_schema = entry.schema.release();
+
+      let tab = new Table($table_heap, $table_schema);
+
+      return tab;
+    };
+
+    async fn createTable(TableSchema &&schema) -> Table! {
+        // Reject duplicates before allocating anything.
+        let catalog_heap = new TableHeap(
+            my.pager,
+            my.catalogPage()
+        );
+        let catalog = new Catalog($catalog_heap);
+
+        immutable adr table_name = schema.name.cstr();
+        const int table_name_size = schema.name.len();
+
+        let existing = await catalog.findTable(
+            table_name,
+            table_name_size
+        );
+
+        if existing.isOk() {
+            return new Error("Table already exists");
+        };
+
+        // Allocate the first page of the new table heap.
+        let raw = (await my.pager.allocatePage())!;
+        const long first_page = raw.id;
+
+        // Format it as a slotted page.
+        let page = slotted.create($raw)!;
+        let initialized = page.release();
+        let __written = (await my.pager.writePage(initialized))!;
+
+        // Give the schema to the catalog entry temporarily.
+        let entry = new TableCatalogEntry(
+            new uni_string(table_name),
+            first_page,
+            $schema
+        );
+
+        // addTable() only serializes the entry; it should not consume it.
+        let __added = (await catalog.addTable(entry))!;
+
+        // Take the schema back out for the live Table object.
+        let table_schema = entry.schema.release();
+
+        let table_heap = new TableHeap(
+            my.pager,
+            first_page
+        );
+
+        let tab = new Table($table_heap, $table_schema);
+
+        return tab;
+    };
+    fn close() -> int {
+        return my.pager.close();
+    };
+};
+
+export async fn createDatabase(const adr path) -> Database! {
+    let pager = (await db.createPager(path))!;
+    let d_b = new Database($pager);
+    return d_b;
+};
+
+export async fn openDatabase(const adr path) -> Database! {
+    let pager = (await db.readDatabase(path))!;
+    let d_b = new Database($pager);
+    return d_b;
+};

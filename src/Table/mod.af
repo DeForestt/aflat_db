@@ -1,0 +1,42 @@
+.needs <std>
+import TableHeap from "../TableHeap";
+import TableSchema from "../Schemas";
+import Row from "../Row";
+import RecordId from "../Record";
+import RowScan from "../Row/RowScan";
+import {encode, decode} from "../Row/Codec" under row_codec;
+
+unique class Table {
+    private TableHeap heap = $heap;
+    private TableSchema schema = $schema;
+
+    fn init(TableHeap &&heap, TableSchema &&schema) -> Self {
+        return my;
+    };
+
+    async fn insert(immutable Row row) -> RecordId! {
+      let record = row_codec.encode(my.schema, row)!;
+
+      return await my.heap.insert(
+        record.data,
+        record.size
+      );
+    };
+
+    async fn read(immutable RecordId id) -> Row! {
+      let record = (await my.heap.read(id))!;
+      return row_codec.decode(my.schema, record);
+    };
+
+    async fn remove(immutable RecordId id) -> bool! {
+      return await my.heap.remove(id);
+    };
+    
+    fn scan() -> RowScan {
+      let heap_scan = my.heap.scan();
+
+      let rs = new RowScan($heap_scan, my.schema);
+
+      return rs;
+    };
+};

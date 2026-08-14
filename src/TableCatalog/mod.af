@@ -1,0 +1,93 @@
+.needs <std>
+import uni_string from "uni_string";
+import TableHeap from "../TableHeap";
+import TableSchema from "../Schemas";
+import {encodedSize, encode, decode} from "./EntryCodec.af" under codec;
+import owned from "Memory";
+import {own} from "Memory" under box;
+
+unique class TableCatalogEntry {
+  uni_string name = $name;
+  long firstPage = firstPage;
+  owned::<TableSchema> schema = box.own($schema);
+
+  fn init(uni_string &&name, long firstPage, TableSchema &&schema) {
+    return my;
+  };
+};
+
+private fn tableNameMatches(
+    immutable uni_string stored_name,
+    immutable adr requested_name,
+    int requested_name_size
+) -> bool {
+    if stored_name.len() != requested_name_size {
+        return false;
+    };
+
+    immutable adr stored_name_bytes = stored_name.cstr();
+    mutable adr stored_cursor = stored_name_bytes;
+    mutable adr requested_cursor = requested_name;
+
+    for int i = 0; i < requested_name_size; i++ {
+        if (stored_cursor as char) != (requested_cursor as char) {
+            return false;
+        };
+        stored_cursor = stored_cursor + 1;
+        requested_cursor = requested_cursor + 1;
+    };
+
+    return true;
+};
+
+
+unique class Catalog {
+    private TableHeap heap = $heap;
+
+    fn init(TableHeap &&heap) -> Self {
+        return my;
+    };
+
+    async fn addTable(TableCatalogEntry entry) -> bool! {
+      let size = codec.encodedSize(entry);
+      let bytes = af_malloc(size);
+      let written = codec.encode(entry, bytes)!;
+
+      if written != size {
+        af_free(bytes);
+        return new Error("Catalog entry encode size mismatch");
+      };
+
+      let __id = (await my.heap.insert(bytes, size))!;
+      af_free(bytes);
+
+      return true;
+    };
+
+    async fn findTable(immutable adr name, int name_size) -> TableCatalogEntry! { 
+
+    let scan = my.heap.scan();
+
+    while true {
+        let next = await scan.next();
+
+        if next.isNone() {
+            return new Error("Table not found");
+        };
+
+        let heap_record = next.toResult("Failed to get record")!;
+        const let entry = codec.decode(
+            heap_record.record.data,
+            heap_record.record.size
+        )!;
+
+        if tableNameMatches(entry.name, name, name_size) {
+            return entry;
+        };
+    };
+};
+
+    fn close() -> int {
+        return my.heap.close();
+    };
+};

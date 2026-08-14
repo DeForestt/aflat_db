@@ -1,0 +1,136 @@
+.needs <std>
+.needs <test>
+.needs <asm.gs>
+
+import {describe, it, assertEqual, assertTrue} from "ATest" under test;
+import {createPager, readDatabase} from "../../../Storage" under db;
+import Database from "../../../mod";
+import TableSchema, ColumnSchema from "../../../Schemas";
+import {Int, Text, Bool} from "../../../Schemas/Types" under db_type;
+import DBValue from "../../../DBValue";
+import {Int, Text, Bool} from "../../../DBValue" under db_value;
+import Row from "../../../Row";
+import RecordId from "../../../Record";
+import vector from "Collections/Vector";
+import uni_string from "uni_string";
+
+fn databaseTestSchema(immutable adr name) -> TableSchema {
+    let columns = new vector::<ColumnSchema>(3);
+    columns.push_back(new ColumnSchema(
+        new uni_string("id"), db_type.Int(), false));
+    columns.push_back(new ColumnSchema(
+        new uni_string("name"), db_type.Text(), false));
+    columns.push_back(new ColumnSchema(
+        new uni_string("active"), db_type.Bool(), false));
+    return new TableSchema(new uni_string(name), $columns);
+};
+
+fn databaseTestRow(int id, immutable adr name, bool active) -> Row {
+    let values = new vector::<DBValue>(3);
+    values.push_back(db_value.Int(id));
+    values.push_back(db_value.Text(new uni_string(name)));
+    values.push_back(db_value.Bool(active));
+    return new Row($values);
+};
+
+fn databaseTestBytesEqual(
+    immutable adr actual,
+    immutable adr expected,
+    int size
+) -> bool {
+    mutable adr actual_cursor = actual;
+    mutable adr expected_cursor = expected;
+    for int i = 0; i < size; i++ {
+        if (actual_cursor as char) != (expected_cursor as char) {
+            return false;
+        };
+        actual_cursor = actual_cursor + 1;
+        expected_cursor = expected_cursor + 1;
+    };
+    return true;
+};
+
+fn databaseTestAssertJamesRow(Row row) -> void {
+    test.assertEqual(3, row.count());
+
+    match row.get(0).expect("missing id") {
+        Int(value) => { test.assertEqual(42, value); },
+        _ => { test.assertTrue(false); }
+    };
+
+    match row.get(1).expect("missing name") {
+        Text(value) => {
+            test.assertEqual(5, value.len());
+            test.assertTrue(databaseTestBytesEqual(
+                value.cstr(), "James", 5));
+        },
+        _ => { test.assertTrue(false); }
+    };
+
+    match row.get(2).expect("missing active") {
+        Bool(value) => { test.assertTrue(value); },
+        _ => { test.assertTrue(false); }
+    };
+    return;
+};
+
+export fn register() -> void {
+    test.describe("Database", fn () {
+        test.it("creates a table and round trips a row", fn () {
+            const adr path = "/tmp/aflat-db-database-table-test.db";
+            let pager = (run db.createPager(path))!;
+            let database = new Database($pager);
+
+            let schema = databaseTestSchema("users");
+            let users = (run database.createTable($schema))!;
+            let row = databaseTestRow(42, "James", true);
+            let id = (run users.insert(row))!;
+            let stored = (run users.read(id))!;
+
+            databaseTestAssertJamesRow(stored);
+            test.assertEqual(#1, database.catalogPage());
+            database.close();
+        });
+
+        test.it("reopens and finds a persisted table", fn () {
+            const adr path = "/tmp/aflat-db-database-reopen-test.db";
+            let pager = (run db.createPager(path))!;
+            let database = new Database($pager);
+
+            let schema = databaseTestSchema("users");
+            let users = (run database.createTable($schema))!;
+            let row = databaseTestRow(42, "James", true);
+            let inserted = (run users.insert(row))!;
+            const long page_id = inserted.pageId;
+            const int slot_id = inserted.slotId;
+            database.close();
+
+            let reopened_pager = (run db.readDatabase(path))!;
+            let reopened = new Database($reopened_pager);
+            let reopened_users = (run reopened.table(`users`))!;
+            let id = new RecordId(page_id, slot_id);
+            let stored = (run reopened_users.read(id))!;
+
+            databaseTestAssertJamesRow(stored);
+            reopened.close();
+        });
+
+        test.it("rejects duplicate and missing tables", fn () {
+            const adr path = "/tmp/aflat-db-database-errors-test.db";
+            let pager = (run db.createPager(path))!;
+            let database = new Database($pager);
+
+            let schema = databaseTestSchema("users");
+            let __users = (run database.createTable($schema))!;
+
+            let duplicate = databaseTestSchema("users");
+            test.assertTrue(
+                (run database.createTable($duplicate)).isErr());
+            test.assertTrue(
+                (run database.table(`missing`)).isErr());
+
+            database.close();
+        });
+    });
+    return;
+};

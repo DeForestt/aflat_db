@@ -1,0 +1,151 @@
+.needs <std>
+.needs <asm.gs>
+.needs <Async.gs>
+import Page from "./Page";
+import File from "files";
+import DBHeader from "../DBFile";
+import Error from "Utils/Error";
+
+unique class Pager {
+  private File file = $file;
+  private mutable DBHeader header = $header;
+  private mutable bool allocating = false;
+  
+  fn init(File &&file, DBHeader &&header) {
+    return my;
+  };
+
+  safe fn catalogPage() -> long {
+    return my.header.catalogPage;
+  };
+
+  async fn readHeader() -> bool! {
+    const int header_size = 40;
+    const adr bytes = af_malloc(header_size);
+    const long read = await my.file.readBytesAtAsync(
+        bytes, header_size, #0);
+
+    if read != header_size {
+      af_free(bytes);
+      return new Error("Unable to read complete database header");
+    };
+
+    af_memcpy(?my.header.magic,        bytes,      8);
+    af_memcpy(?my.header.version,      bytes + 8,  4);
+    af_memcpy(?my.header.pageSize,     bytes + 12, 4);
+    af_memcpy(?my.header.pageCount,    bytes + 16, 8);
+    af_memcpy(?my.header.catalogPage,  bytes + 24, 8);
+    af_memcpy(?my.header.freeListPage, bytes + 32, 8);
+    af_free(bytes);
+
+    let expected = new DBHeader();
+    if (my.header.magic != expected.magic) |
+       (my.header.version != expected.version) |
+       (my.header.pageSize != expected.pageSize) |
+       (my.header.pageCount < #1) {
+      return new Error("Invalid database header");
+    };
+
+    const long expected_file_size =
+        my.header.pageCount * my.header.pageSize;
+    const long file_size = sys_lseek(my.file.file, #0, 2);
+    if file_size != expected_file_size {
+      return new Error("Database size does not match its header");
+    };
+
+    return true;
+  };
+
+  private async fn writeHeader() -> bool! {
+    const int header_size = 40;
+    const adr bytes = af_malloc(header_size);
+
+    af_memcpy(bytes,      ?my.header.magic,        8);
+    af_memcpy(bytes + 8,  ?my.header.version,      4);
+    af_memcpy(bytes + 12, ?my.header.pageSize,     4);
+    af_memcpy(bytes + 16, ?my.header.pageCount,    8);
+    af_memcpy(bytes + 24, ?my.header.catalogPage,  8);
+    af_memcpy(bytes + 32, ?my.header.freeListPage, 8);
+
+    const long written =
+        await my.file.writeBytesAtAsync(bytes, header_size, #0);
+
+    af_free(bytes);
+
+    if written < 0 {
+        return new Error("Failed to write the database header");
+    };
+
+    if written != header_size {
+        return new Error("Incomplete database header write");
+    };
+
+    return true;
+  };
+
+  async fn allocatePage() -> Page! {
+    // Cooperatively wait without creating a timer for every contender.
+    while my.allocating {
+      yield;
+    };
+    my.allocating = true;
+
+    let id = my.header.pageCount;
+    let page_size = my.header.pageSize;   
+    let page = new Page(id, page_size);
+
+    let page_result = await my.writePage(page);
+    if page_result.isErr() {
+      my.allocating = false;
+      return page_result.unwrapErr();
+    };
+    
+    my.header.pageCount = my.header.pageCount + 1;
+
+    let header_result = await my.writeHeader();
+    if header_result.isErr() {
+      my.allocating = false;
+      return header_result.unwrapErr();
+    };
+
+    my.allocating = false;
+    
+    return page;
+  };
+
+  async fn readPage(long id) -> Page! {
+    if ( id <=0 ) | (id >= my.header.pageCount)
+      return new Error("Attempt to read invalid page");
+    
+    let page = new Page(id, my.header.pageSize);
+    const let offset = id * my.header.pageSize;
+    
+    let read = await my.file.readBytesAtAsync(
+        page.data, my.header.pageSize, offset);
+    
+    if read < 0 {
+        return new Error("Failed to read the database page");
+    };
+
+    if read != my.header.pageSize {
+        return new Error("Incomplete database page read");
+    };
+    return page;
+  };
+
+  async fn writePage(immutable Page page) -> bool! {
+    long offset = page.id * my.header.pageSize;
+    let written = await my.file.writeBytesAtAsync(
+        page.data, my.header.pageSize, offset);
+    if written < 0
+      return new Error("Failed to write to the database");
+    if written != my.header.pageSize
+      return new Error("Incomplete database page write");
+    return true;
+  };
+
+  fn close() -> int {
+    return my.file.close();
+  };
+
+};

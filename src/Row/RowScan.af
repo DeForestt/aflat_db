@@ -1,0 +1,47 @@
+.needs <std>
+
+import TableSchema from "../Schemas";
+import view from "Memory";
+import TableScan from "../TableHeap/TableScan";
+import {loan} from "Memory" under box;
+import {decode} from "../Row/Codec" under row_codec;
+import {None} from "Utils/option" under opt;
+import TableRecord from "../Table/TableRecord";
+
+unique class RowScan {
+    private TableScan scan = $scan;
+    private view::<TableSchema> schema = box.loan(schema);
+
+    fn init(
+        TableScan &&scan,
+        immutable TableSchema schema
+    ) -> Self {
+        return my;
+    };
+
+    async fn next() -> TableRecord? {
+        let next = await my.scan.next();
+
+        if next.isNone() {
+            return opt.None::<TableRecord>();
+        };
+
+        let heap_record = next.expect("expected heap record");
+
+        let schema = my.schema.view();
+
+        let row = row_codec.decode(
+            schema,
+            heap_record.record
+        );
+
+        if row.isErr() {
+          return;
+        };
+
+        let row = row.expect("expected row");
+        let tr = new TableRecord(heap_record.id, $row);
+
+        return tr;
+    };
+};

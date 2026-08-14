@@ -1,0 +1,105 @@
+.needs <std>
+
+import {print} from "uni_string" under uni;
+import {createDatabase, openDatabase} from "../src/mod" under db;
+import TableSchema, ColumnSchema from "../src/Schemas";
+import {Int, Text, Bool} from "../src/Schemas/Types" under db_type;
+import DBValue from "../src/DBValue";
+import {Int, Text, Bool} from "../src/DBValue" under db_value;
+import Row from "../src/Row";
+
+async fn main() -> int {
+    const adr path = "example.db";
+
+    let database = (await db.createDatabase(path))
+        .expect("unable to create database");
+
+    let columns = [
+        new ColumnSchema(`id`, db_type.Int(), false),
+        new ColumnSchema(`name`, db_type.Text(), false),
+        new ColumnSchema(`active`, db_type.Bool(), false),
+    ];
+
+    let schema = new TableSchema(`users`, $columns);
+
+    let users = (await database.createTable($schema))
+        .expect("unable to create users table");
+
+    let james = new Row([
+        db_value.Int(1),
+        db_value.Text(`James`),
+        db_value.Bool(true),
+    ]);
+
+    let sarah = new Row([
+        db_value.Int(2),
+        db_value.Text(`Sarah`),
+        db_value.Bool(false),
+    ]);
+
+    let michael = new Row([
+        db_value.Int(3),
+        db_value.Text(`Michael`),
+        db_value.Bool(true),
+    ]);
+
+    uni.print(`Adding James to the users table...\n`);
+    let __james_id = (await users.insert(james))
+        .expect("unable to insert James");
+
+    uni.print(`Adding Sarah to the users table...\n`);
+    let __sarah_id = (await users.insert(sarah))
+        .expect("unable to insert Sarah");
+
+    uni.print(`Adding Michael to the users table...\n`);
+    let __michael_id = (await users.insert(michael))
+        .expect("unable to insert Michael");
+
+    database.close();
+
+    let reopened = (await db.openDatabase(path))
+        .expect("unable to reopen database");
+
+    let reopened_users = (await reopened.table(`users`))
+        .expect("unable to open users table");
+
+
+    foreach record in reopened_users.scan() {
+      let row = record.row;
+
+      let id = row.get(0).expect("missing id");
+      let name = row.get(1).expect("missing name");
+      let active = row.get(2).expect("missing active");
+
+      match id {
+          Int(value) => {
+              uni.print(`id: {value}, `);
+          },
+          _ => {
+              uni.print("id: <invalid>, ");
+          }
+      };
+
+      match name {
+          Text(value) => {
+              uni.print(`name: {value}, `);
+          },
+          _ => {
+              uni.print("name: <invalid>, ");
+          }
+      };
+
+      match active {
+          Bool(value) => {
+              uni.print(`active: {value}\n`);
+          },
+          _ => {
+              uni.print("active: <invalid>\n");
+          }
+      };
+    };
+
+    reopened.close();
+
+    return 0;
+};

@@ -1,0 +1,78 @@
+.needs <std>
+.needs <test>
+.needs <asm.gs>
+
+import {describe, it, assertEqual, assertTrue} from "ATest" under test;
+import {createPager, readDatabase} from "../../Storage" under db;
+import TableHeap from "../../TableHeap";
+import Catalog, TableCatalogEntry from "../../TableCatalog";
+import TableSchema, ColumnSchema from "../../Schemas";
+import vector from "Collections/Vector";
+import uni_string from "uni_string";
+
+fn tableCatalogTestEntry(
+    immutable adr name,
+    long first_page
+) -> TableCatalogEntry {
+    let columns = new vector::<ColumnSchema>(0);
+    let schema = new TableSchema(new uni_string(name), $columns);
+    return new TableCatalogEntry(
+        new uni_string(name), first_page, $schema);
+};
+
+export fn register() -> void {
+    test.describe("Table catalog", fn () {
+        test.it("finds a table after closing and reopening the database", fn () {
+            const adr path = "/tmp/aflat-db-table-catalog-reopen-test.db";
+            let pager = (run db.createPager(path))!;
+            let table_page = (run pager.allocatePage())!;
+            const long table_page_id = table_page.id;
+
+            let catalog_heap = new TableHeap($pager, #1);
+            let catalog = new Catalog($catalog_heap);
+            let columns = new vector::<ColumnSchema>(0);
+            let schema = new TableSchema(
+                new uni_string("users"), $columns);
+            let entry = new TableCatalogEntry(
+                new uni_string("users"), table_page_id, $schema);
+            test.assertTrue((run catalog.addTable(entry))!);
+            catalog.close();
+
+            let reopened_pager = (run db.readDatabase(path))!;
+            let reopened_heap = new TableHeap($reopened_pager, #1);
+            let reopened_catalog = new Catalog($reopened_heap);
+
+            let found = (run reopened_catalog.findTable("users", 5))!;
+            test.assertEqual(#2, found.firstPage);
+            test.assertTrue(
+                (run reopened_catalog.findTable("missing", 7)).isErr());
+            reopened_catalog.close();
+        });
+
+        test.it("finds the correct table among same-length names", fn () {
+            const adr path = "/tmp/aflat-db-table-catalog-find-test.db";
+            let pager = (run db.createPager(path))!;
+            let teams_page = (run pager.allocatePage())!;
+            let users_page = (run pager.allocatePage())!;
+            const long teams_page_id = teams_page.id;
+            const long users_page_id = users_page.id;
+
+            let catalog_heap = new TableHeap($pager, #1);
+            let catalog = new Catalog($catalog_heap);
+            let teams = tableCatalogTestEntry("teams", teams_page_id);
+            let users = tableCatalogTestEntry("users", users_page_id);
+            test.assertTrue((run catalog.addTable(teams))!);
+            test.assertTrue((run catalog.addTable(users))!);
+
+            let found = (run catalog.findTable("users", 5))!;
+
+            test.assertEqual(users_page_id, found.firstPage);
+            test.assertEqual(5, found.name.len());
+            let found_schema = found.schema.release();
+            test.assertEqual(5, found_schema.name.len());
+            test.assertEqual(0, found_schema.columnCount());
+            catalog.close();
+        });
+    });
+    return;
+};

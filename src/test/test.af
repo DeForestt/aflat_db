@@ -1,0 +1,26 @@
+.needs <std>
+.needs <test>
+
+import {summary} from "ATest" under test;
+import {register} from "./DB/Database" under database_tests;
+import {register} from "./DB/Database/Class" under database_class_tests;
+import {register} from "./DB/Pager/SlottedPage" under slotted_page_tests;
+import {register} from "./DB/TableHeap" under table_heap_tests;
+import {register} from "./DB/Table" under table_tests;
+import {register} from "./DB/TableCatalog" under table_catalog_tests;
+import {register} from "./DB/Row/RowCodec" under row_codec_tests;
+import {register} from "./DB/TableCatalog/EntryCodec" under catalog_codec_tests;
+
+fn main() -> int {
+    database_tests.register();
+    database_class_tests.register();
+    slotted_page_tests.register();
+    table_heap_tests.register();
+    table_tests.register();
+    table_catalog_tests.register();
+    row_codec_tests.register();
+    catalog_codec_tests.register();
+
+    test.summary();
+    return 0;
+};

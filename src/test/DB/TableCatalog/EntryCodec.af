@@ -1,0 +1,210 @@
+.needs <std>
+.needs <test>
+
+import {describe, it, assertEqual, assertTrue} from "ATest" under test;
+import TableCatalogEntry from "../../../TableCatalog";
+import TableSchema, ColumnSchema from "../../../Schemas";
+import {Int, Long, Float, Bool, Text} from "../../../Schemas/Types" under db_type;
+import {encodedSize, encode, decode} from "../../../TableCatalog/EntryCodec" under codec;
+import vector from "Collections/Vector";
+import uni_string from "uni_string";
+
+fn catalogCodecBytesEqual(
+    immutable adr actual,
+    immutable adr expected,
+    int size
+) -> bool {
+    mutable int index = 0;
+    mutable adr actual_cursor = actual;
+    mutable adr expected_cursor = expected;
+    while index < size {
+        if (actual_cursor as char) != (expected_cursor as char) {
+            return false;
+        };
+        actual_cursor = actual_cursor + 1;
+        expected_cursor = expected_cursor + 1;
+        index = index + 1;
+    };
+    return true;
+};
+
+fn catalogCodecUsersEntry() -> TableCatalogEntry {
+    let columns = new vector::<ColumnSchema>(2);
+    columns.push_back(new ColumnSchema(
+        new uni_string("id"), db_type.Int(), false));
+    columns.push_back(new ColumnSchema(
+        new uni_string("name"), db_type.Text(), true));
+    let schema = new TableSchema(new uni_string("users"), $columns);
+
+    return new TableCatalogEntry(
+        new uni_string("users"), #42, $schema);
+};
+
+fn catalogCodecAllTypesEntry() -> TableCatalogEntry {
+    let columns = new vector::<ColumnSchema>(5);
+    columns.push_back(new ColumnSchema(
+        new uni_string("id"), db_type.Int(), false));
+    columns.push_back(new ColumnSchema(
+        new uni_string("sequence"), db_type.Long(), false));
+    columns.push_back(new ColumnSchema(
+        new uni_string("score"), db_type.Float(), true));
+    columns.push_back(new ColumnSchema(
+        new uni_string("active"), db_type.Bool(), false));
+    columns.push_back(new ColumnSchema(
+        new uni_string("name"), db_type.Text(), true));
+    let schema = new TableSchema(new uni_string("all_types"), $columns);
+
+    const long first_page = #9876543 * #1000;
+    return new TableCatalogEntry(
+        new uni_string("all_types"), first_page, $schema);
+};
+
+export fn register() -> void {
+    test.describe("Table catalog codec", fn () {
+        test.it("returns the number of bytes written by encode", fn () {
+            let entry = catalogCodecUsersEntry();
+            const int size = codec.encodedSize(entry);
+            const adr bytes = af_malloc(size);
+
+            const int written = codec.encode(entry, bytes)!;
+
+            test.assertEqual(45, size);
+            test.assertEqual(size, written);
+            af_free(bytes);
+        });
+
+        test.it("encodes the expected catalog bytes", fn () {
+            let entry = catalogCodecUsersEntry();
+            const int size = codec.encodedSize(entry);
+            const adr actual = af_malloc(size);
+            const int written = codec.encode(entry, actual)!;
+
+            const adr expected = af_malloc(45);
+            mutable adr expected_cursor = expected;
+            for int i = 0; i < 45; i++ {
+                expected_cursor =: '\0';
+                expected_cursor = expected_cursor + 1;
+            };
+
+            const int table_name_size = 5;
+            af_memcpy(expected, ?table_name_size, 4);
+            af_memcpy(expected + 4, "users", 5);
+
+            const long first_page = #42;
+            af_memcpy(expected + 9, ?first_page, 8);
+
+            const int column_count = 2;
+            af_memcpy(expected + 17, ?column_count, 4);
+
+            const int id_name_size = 2;
+            af_memcpy(expected + 21, ?id_name_size, 4);
+            af_memcpy(expected + 25, "id", 2);
+            const int int_type_tag = 0;
+            af_memcpy(expected + 27, ?int_type_tag, 4);
+            const bool id_nullable = false;
+            af_memcpy(expected + 31, ?id_nullable, 1);
+
+            const int name_size = 4;
+            af_memcpy(expected + 32, ?name_size, 4);
+            af_memcpy(expected + 36, "name", 4);
+            const int text_type_tag = 5;
+            af_memcpy(expected + 40, ?text_type_tag, 4);
+            const bool name_nullable = true;
+            af_memcpy(expected + 44, ?name_nullable, 1);
+
+            test.assertEqual(45, written);
+            test.assertTrue(catalogCodecBytesEqual(actual, expected, 45));
+
+            af_free(expected);
+            af_free(actual);
+        });
+
+        test.it("round trips a table catalog entry", fn () {
+            let entry = catalogCodecAllTypesEntry();
+            const int size = codec.encodedSize(entry);
+            const adr bytes = af_malloc(size);
+            let __written = codec.encode(entry, bytes)!;
+
+            let decoded = codec.decode(bytes, size)!;
+
+            test.assertEqual(9, decoded.name.len());
+            test.assertTrue(catalogCodecBytesEqual(
+                decoded.name.cstr(), "all_types", 9));
+            const long expected_first_page = #9876543 * #1000;
+            test.assertEqual(expected_first_page, decoded.firstPage);
+            let decoded_schema = decoded.schema.release();
+            test.assertEqual(5, decoded_schema.columnCount());
+
+            let id = decoded_schema.column(0)!.view();
+            test.assertTrue(catalogCodecBytesEqual(
+                id.name.cstr(), "id", 2));
+            test.assertTrue(id.type.isInt());
+            test.assertTrue(!id.nullable);
+
+            let sequence = decoded_schema.column(1)!.view();
+            test.assertTrue(catalogCodecBytesEqual(
+                sequence.name.cstr(), "sequence", 8));
+            test.assertTrue(sequence.type.isLong());
+            test.assertTrue(!sequence.nullable);
+
+            let score = decoded_schema.column(2)!.view();
+            test.assertTrue(catalogCodecBytesEqual(
+                score.name.cstr(), "score", 5));
+            test.assertTrue(score.type.isFloat());
+            test.assertTrue(score.nullable == true);
+
+            let active = decoded_schema.column(3)!.view();
+            test.assertTrue(catalogCodecBytesEqual(
+                active.name.cstr(), "active", 6));
+            test.assertTrue(active.type.isBool());
+            test.assertTrue(!active.nullable);
+
+            let name = decoded_schema.column(4)!.view();
+            test.assertTrue(catalogCodecBytesEqual(
+                name.name.cstr(), "name", 4));
+            test.assertTrue(name.type.isText());
+            test.assertTrue(name.nullable == true);
+
+            af_free(bytes);
+        });
+
+        test.it("rejects malformed catalog data", fn () {
+            let entry = catalogCodecUsersEntry();
+            const int size = codec.encodedSize(entry);
+            const adr bytes = af_malloc(size + 1);
+            let __written = codec.encode(entry, bytes)!;
+            (bytes + size) =: '\0';
+
+            // The table name claims five bytes, but only four follow.
+            test.assertTrue(codec.decode(bytes, 8).isErr());
+
+            const int invalid_column_count = 3;
+            af_memcpy(bytes + 17, ?invalid_column_count, 4);
+            test.assertTrue(codec.decode(bytes, size).isErr());
+
+            const int column_count = 2;
+            af_memcpy(bytes + 17, ?column_count, 4);
+            const int oversized_column_name = 30;
+            af_memcpy(bytes + 21, ?oversized_column_name, 4);
+            test.assertTrue(codec.decode(bytes, size).isErr());
+
+            const int id_name_size = 2;
+            af_memcpy(bytes + 21, ?id_name_size, 4);
+            const int one_column = 1;
+            af_memcpy(bytes + 17, ?one_column, 4);
+            const int invalid_type_tag = 99;
+            af_memcpy(bytes + 27, ?invalid_type_tag, 4);
+            test.assertTrue(codec.decode(bytes, 32).isErr());
+
+            const int int_type_tag = 0;
+            af_memcpy(bytes + 27, ?int_type_tag, 4);
+            test.assertTrue(codec.decode(bytes, 31).isErr());
+
+            af_memcpy(bytes + 17, ?column_count, 4);
+            test.assertTrue(codec.decode(bytes, size + 1).isErr());
+
+            af_free(bytes);
+        });
+    });
+    return;
+};

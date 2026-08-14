@@ -1,0 +1,123 @@
+.needs <std>
+import Pager from "../Pager";
+import RecordId, RecordView, Record from "../Record";
+import {open, create} from "../Pager/SlottedPage" under slotted;
+import {resultWrapper, accept, reject} from "Utils/result" under res;
+import AsyncLock, LockGuard from "concurrency";
+import TableScan from "./TableScan";
+import view from "Memory";
+import {loan} from "Memory" under box;
+
+unique class TableHeap {
+    private view::<Pager> pager = box.loan(pager);
+    private long firstPage = firstPage;
+    private AsyncLock operationLock = new AsyncLock();
+
+
+    fn init(Pager pager, long firstPage) -> Self {
+        return my;
+    };
+
+    async fn insert(immutable adr bytes, int size) -> RecordId! {
+        const LockGuard __guard = await my.operationLock.guard();
+
+        if (size + 8) > (4096 - 16) {
+          return new Error("Record is too large for a database page");
+        };
+
+        mutable long page_id = my.firstPage;
+
+        while true {
+          let raw = (await my.pager.view().readPage(page_id))!;
+          let page = slotted.open($raw)!;
+
+          // Existing page can take it.
+          if page.canInsert(size) {
+            const int slot_id = page.insert(bytes, size)!;
+
+            let updated = page.release();
+            let __ = (await my.pager.view().writePage(updated))!;
+            return new RecordId(page_id, slot_id);
+          };
+
+          // A deletion leaves the record body behind. Compact once and retry
+          // before moving farther down the heap chain.
+          const int reclaimed = page.compact()!;
+
+          if page.canInsert(size) {
+            const int slot_id = page.insert(bytes, size)!;
+
+            let updated = page.release();
+            let __ = (await my.pager.view().writePage(updated))!;
+            return new RecordId(page_id, slot_id);
+          };
+
+          const long next_page = page.nextPage();
+
+          if next_page >= 0 {
+            // Compaction changed this page even though it did not free enough
+            // room for this record. Persist it before following the link.
+            if reclaimed > 0 {
+              let compacted = page.release();
+              let __ = (await my.pager.view().writePage(compacted))!;
+            };
+            page_id = next_page;
+            continue;
+          };
+
+          // End of the chain. Allocate another page.
+          let new_raw = (await my.pager.view().allocatePage())!;
+          const long new_page_id = new_raw.id;
+          let new_page = slotted.create($new_raw)!;
+
+          // Link current tail to new page.
+          page.setNextPage(new_page_id);
+
+          let old_raw = page.release();
+          let __ = (await my.pager.view().writePage(old_raw))!;
+
+          // Insert into the new page.
+          const int slot_id = new_page.insert(bytes, size)!;
+
+          let updated_new_raw = new_page.release();
+          let __ = (await my.pager.view().writePage(updated_new_raw))!;
+
+          return new RecordId(new_page_id, slot_id);
+        };
+    };
+
+    async fn read(immutable RecordId id) -> Record! {
+        const LockGuard __guard = await my.operationLock.guard();
+
+        let raw = (await my.pager.view().readPage(id.pageId))!;
+        let page = slotted.open($raw)!;
+        let record = page.read(id.slotId)!;
+        return new Record(record);
+    };
+
+    async fn remove(immutable RecordId id) -> bool! {
+        const LockGuard __guard = await my.operationLock.guard();
+
+        let raw = (await my.pager.view().readPage(id.pageId))!;
+        let page = slotted.open($raw)!;
+
+        let __removed = page.remove(id.slotId)!;
+
+        let updated = page.release();
+        let __ = (await my.pager.view().writePage(updated))!;
+
+        return true;
+    };
+
+    async fn readRawPage(long pageId) -> Page! {
+      return await my.pager.view().readPage(pageId);
+    };
+
+    fn scan() -> TableScan {
+      return new TableScan(my, my.firstPage);
+    };
+
+    fn close() -> int {
+      return my.pager.view().close();
+    };
+};

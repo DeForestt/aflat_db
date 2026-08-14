@@ -1,0 +1,36 @@
+.needs <std>
+import uni_string from "uni_string";
+
+union DBValue {
+    Null,
+    Int(int),
+    Long(long),
+    Float(float),
+    Bool(bool),
+    Text(uni_string)
+
+};
+
+export fn Null() -> DBValue {
+  return new DBValue->Null();
+};
+
+export fn Int(int value) -> DBValue {
+  return new DBValue->Int(value);
+};
+
+export fn Long(long value) -> DBValue {
+  return new DBValue->Long(value);
+};
+
+export fn Float(float value) -> DBValue {
+  return new DBValue->Float(value);
+};
+
+export fn Bool(bool value) -> DBValue {
+  return new DBValue->Bool(value);
+};
+
+export fn Text(uni_string value) -> DBValue {
+  return new DBValue->Text(value);
+};

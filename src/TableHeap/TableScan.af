@@ -1,0 +1,55 @@
+.needs <std>
+import TableHeap from "../TableHeap";
+import HeapRecord from "./HeapRecord";
+import view from "Memory";
+import {loan} from "Memory" under box;
+import {Some, None, optionWrapper} from "Utils/option" under opt;
+import {open, create} from "../Pager/SlottedPage" under slotted;
+import Record, RecordId from "../Record";
+
+unique class TableScan {
+  private view::<TableHeap> heap = box.loan(heap);
+  private mutable long pageId = firstPage;
+  private mutable int slotId = 0;
+  private mutable bool complete = false;
+
+  fn init(immutable TableHeap heap, long firstPage) -> Self {
+    return my;
+  };
+
+  async fn next() -> HeapRecord? {
+    if my.complete return;
+    let heap = my.heap.view();
+    while true {
+        let raw = (await heap.readRawPage(my.pageId)).expect("should be a page");
+        let page = slotted.open($raw).expect("should be open");
+
+        while my.slotId < page.slotCount() {
+            const int current_slot = my.slotId;
+            my.slotId = my.slotId + 1;
+
+            let val = page.read(current_slot);
+
+            if val.isErr() {
+                continue;
+            };
+
+            let record_view = val.expect("should not be an error");
+            let record = new Record(record_view);
+            let id = new RecordId(my.pageId, current_slot);
+            let heap_record = new HeapRecord(id, $record);
+            return opt.Some(heap_record);
+        };
+
+        const long next_page = page.nextPage();
+
+        if next_page < 0 {
+            my.complete = true;
+            return opt.None::<HeapRecord>();
+        };
+
+        my.pageId = next_page;
+        my.slotId = 0;
+    };
+  };
+};

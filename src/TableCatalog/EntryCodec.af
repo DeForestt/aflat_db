@@ -1,0 +1,179 @@
+.needs <std>
+import TableSchema, ColumnSchema from "../Schemas";
+import TableCatalogEntry from "../TableCatalog";
+import {fromTypeTag} from "../Schemas/Types" under db_type;
+import Error from "Utils/Error";
+import vector from "Collections/Vector";
+import uni_string from "uni_string";
+
+export fn encodedSize(
+    immutable TableCatalogEntry entry
+) -> int {
+    mutable int size = 0;
+
+    size = size + 4;                  // table name length
+    size = size + entry.name.len();   // table name
+    size = size + 8;                  // first page
+    size = size + 4;                  // column count
+
+    immutable let schema = entry.schema.view();
+    foreach column in schema.columns {
+        size = size + 4;                          // column name length
+        size = size + column.view().name.len();   // column name
+        size = size + 4;                          // type tag
+        size = size + 1;                          // nullable
+    };
+
+    return size;
+};
+
+export fn encode(immutable TableCatalogEntry schema, mutable adr cursor) -> int! {
+  let start = cursor;
+  let table_name_length = schema.name.len();
+  
+  af_memcpy(cursor, ?table_name_length, 4);
+  cursor = cursor + 4;
+  
+  // now we copy the actual name
+  af_memcpy(cursor, schema.name.cstr(), table_name_length);
+
+  cursor = cursor + table_name_length;
+
+  // copy the first page id
+  let first_page = schema.firstPage;
+  af_memcpy(cursor, ?first_page, 8);
+  cursor = cursor + 8;
+
+  // copy the column count;
+  immutable let table_schema = schema.schema.view();
+  let column_count = table_schema.columns.count();
+  af_memcpy(cursor, ?column_count, 4);
+  cursor = cursor + 4;
+  
+  // now for the columns
+  foreach column in table_schema.columns {
+    let column_name_length = column.view().name.len();
+    af_memcpy(cursor, ?column_name_length, 4);
+    cursor = cursor + 4;
+
+    af_memcpy(cursor, column.view().name.cstr(), column_name_length);
+    cursor = cursor + column_name_length;
+
+    let type_tag = column.view().type.toTypeTag();
+    af_memcpy(cursor, ?type_tag, 4);
+    cursor = cursor + 4;
+
+    let nullable = column.view().nullable;
+    af_memcpy(cursor, ?nullable, 1);
+    cursor = cursor + 1;
+  };
+  
+  // added the 0 here to force it to be treated as a `number` which is valid as an int return.
+  return 0 + cursor - start;
+};
+
+export fn decode(immutable adr bytes, int size) -> TableCatalogEntry! {
+  if size < 4 {
+    return new Error("Truncated table name length");
+  };
+
+  mutable adr cursor = bytes;
+  mutable int remaining = size;
+
+  int table_name_length = 0;
+  af_memcpy(?table_name_length, cursor, 4);
+  cursor = cursor + 4;
+  remaining = remaining - 4;
+
+  if (table_name_length < 0) | (remaining < table_name_length) {
+    return new Error("Truncated table name");
+  };
+
+  const adr table_name_bytes = af_malloc(table_name_length + 1);
+  af_memcpy(table_name_bytes, cursor, table_name_length);
+  (table_name_bytes + table_name_length) =: '\0';
+  let table_name = new uni_string(table_name_bytes);
+  af_free(table_name_bytes);
+  cursor = cursor + table_name_length;
+  remaining = remaining - table_name_length;
+
+  if remaining < 8 {
+    return new Error("Truncated first page ID");
+  };
+
+  long first_page = 0;
+  af_memcpy(?first_page, cursor, 8);
+  cursor = cursor + 8;
+  remaining = remaining - 8;
+
+  if remaining < 4 {
+    return new Error("Truncated column count");
+  };
+
+  int column_count = 0;
+  af_memcpy(?column_count, cursor, 4);
+  cursor = cursor + 4;
+  remaining = remaining - 4;
+
+  // Every column requires at least a name length, type tag, and null flag.
+  if (column_count < 0) | (column_count > remaining / 9) {
+    return new Error("Invalid column count");
+  };
+
+  let columns = new vector::<ColumnSchema>(column_count);
+  for int i = 0; i < column_count; i++ {
+    if remaining < 4 {
+      return new Error("Truncated column name length");
+    };
+
+    int column_name_length = 0;
+    af_memcpy(?column_name_length, cursor, 4);
+    cursor = cursor + 4;
+    remaining = remaining - 4;
+
+    if (column_name_length < 0) | (remaining < column_name_length) {
+      return new Error("Truncated column name");
+    };
+
+    const adr column_name_bytes = af_malloc(column_name_length + 1);
+    af_memcpy(column_name_bytes, cursor, column_name_length);
+    (column_name_bytes + column_name_length) =: '\0';
+    let column_name = new uni_string(column_name_bytes);
+    af_free(column_name_bytes);
+    cursor = cursor + column_name_length;
+    remaining = remaining - column_name_length;
+
+    if remaining < 4 {
+      return new Error("Truncated column type tag");
+    };
+
+    int type_tag = 0;
+    af_memcpy(?type_tag, cursor, 4);
+    cursor = cursor + 4;
+    remaining = remaining - 4;
+    let column_type = db_type.fromTypeTag(type_tag)!;
+
+    if remaining < 1 {
+      return new Error("Truncated nullable byte");
+    };
+
+    bool nullable = false;
+    af_memcpy(?nullable, cursor, 1);
+    cursor = cursor + 1;
+    remaining = remaining - 1;
+
+    columns.push_back(new ColumnSchema(
+      $column_name, column_type, nullable));
+  };
+
+  if remaining != 0 {
+    return new Error("Trailing table catalog bytes");
+  };
+
+  let schema = new TableSchema(
+    new uni_string(table_name.cstr()), $columns);
+  let entry = new TableCatalogEntry(
+    new uni_string(table_name.cstr()), first_page, $schema);
+  return entry;
+
+};

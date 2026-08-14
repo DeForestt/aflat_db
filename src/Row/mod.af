@@ -1,0 +1,20 @@
+
+.needs <std>
+import vector from "Collections/Vector";
+import DBValue from "../DBValue";
+
+unique class Row {
+  vector::<DBValue> values = $values;
+
+  fn init(vector::<DBValue> &&values) -> Self {
+    return my;
+  };
+
+  safe fn count() -> int {
+    return my.values.count();
+  };
+
+  fn get(int i) -> DBValue! {
+    return my.values.get(i).toResult("Failed To find Expected DBValue");
+  };
+};

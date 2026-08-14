@@ -1,0 +1,20 @@
+.needs <std>
+import uni_string from "uni_string";
+
+unique class DBHeader {
+  // Serialized header size and defaults. Page zero is reserved for this data.
+  mutable long magic;
+  mutable int version = 1;
+  mutable int pageSize = 4096;
+  mutable long pageCount = 1;
+
+  mutable long catalogPage = 1;
+  mutable long freeListPage = -1;
+
+  fn init() {
+    // Copy the seven-byte signature and its NUL terminator into the integer.
+    // Casting a string to long would store its address, not its bytes.
+    af_memcpy(?my.magic, "AFLATDB", 8);
+    return my;
+  };
+};

@@ -1,0 +1,32 @@
+.needs <std>
+import uni_string from "uni_string";
+import DBType from "./Types";
+import vector from "Collections/Vector";
+import view from "Memory";
+
+unique class ColumnSchema {
+    uni_string name = $name;
+    DBType type = type;
+    bool nullable = nullable;
+
+    fn init(uni_string &&name, DBType type, bool nullable) -> Self {
+        return my;
+    };
+};
+
+unique class TableSchema {
+    uni_string name = $name;
+    vector::<ColumnSchema> columns = $columns;
+
+    fn init(uni_string &&name, vector::<ColumnSchema> &&columns) -> Self {
+        return my;
+    };
+
+    safe fn columnCount() -> int {
+      return my.columns.count();
+    };
+
+    fn column(int i) -> view::<ColumnSchema>! {
+      return my.columns.get(i).toResult("Failed to find spesified column");
+    };
+};

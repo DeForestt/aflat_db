@@ -1,0 +1,173 @@
+.needs <std>
+.needs <test>
+.needs <asm.gs>
+
+import {describe, it, assertEqual, assertTrue} from "ATest" under test;
+import {createPager} from "../../Storage" under db;
+import SlottedPage from "../../Pager/SlottedPage";
+import TableHeap from "../../TableHeap";
+import Table from "../../Table";
+import TableSchema, ColumnSchema from "../../Schemas";
+import {Int, Text, Bool} from "../../Schemas/Types" under db_type;
+import DBValue from "../../DBValue";
+import {Int, Text, Bool} from "../../DBValue" under db_value;
+import Row from "../../Row";
+import vector from "Collections/Vector";
+import uni_string from "uni_string";
+
+fn tableTestBytesEqual(
+    immutable adr actual,
+    immutable adr expected,
+    int size
+) -> bool {
+    mutable adr actual_cursor = actual;
+    mutable adr expected_cursor = expected;
+    for int i = 0; i < size; i++ {
+        if (actual_cursor as char) != (expected_cursor as char) {
+            return false;
+        };
+        actual_cursor = actual_cursor + 1;
+        expected_cursor = expected_cursor + 1;
+    };
+    return true;
+};
+
+fn tableTestCreate(immutable adr path) -> Table! {
+    let pager = (run db.createPager(path))!;
+    let raw = (run pager.allocatePage())!;
+    const long table_page_id = raw.id;
+    let page = new SlottedPage($raw);
+    page.initialize();
+    let initialized = page.release();
+    let __written = (run pager.writePage(initialized))!;
+
+    let columns = new vector::<ColumnSchema>(3);
+    columns.push_back(new ColumnSchema(
+        new uni_string("id"), db_type.Int(), false));
+    columns.push_back(new ColumnSchema(
+        new uni_string("name"), db_type.Text(), false));
+    columns.push_back(new ColumnSchema(
+        new uni_string("active"), db_type.Bool(), false));
+    let schema = new TableSchema(new uni_string("users"), $columns);
+
+    let heap = new TableHeap($pager, table_page_id);
+    let table = new Table($heap, $schema);
+    return table;
+};
+
+fn tableTestRow(int id, immutable adr name, bool active) -> Row {
+    let values = new vector::<DBValue>(3);
+    values.push_back(db_value.Int(id));
+    values.push_back(db_value.Text(new uni_string(name)));
+    values.push_back(db_value.Bool(active));
+    return new Row($values);
+};
+
+export fn register() -> void {
+    test.describe("Table", fn () {
+        test.it("inserts, reads, and removes typed rows", fn () {
+            const adr path = "/tmp/aflat-db-table-test.db";
+            let pager = (run db.createPager(path))!;
+            let raw = (run pager.allocatePage())!;
+            const long table_page_id = raw.id;
+            let page = new SlottedPage($raw);
+            page.initialize();
+            let initialized = page.release();
+            let __written = (run pager.writePage(initialized))!;
+
+            let columns = new vector::<ColumnSchema>(3);
+            columns.push_back(new ColumnSchema(
+                new uni_string("id"), db_type.Int(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("name"), db_type.Text(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("active"), db_type.Bool(), false));
+            let schema = new TableSchema(
+                new uni_string("users"), $columns);
+
+            let heap = new TableHeap($pager, table_page_id);
+            let table = new Table($heap, $schema);
+
+            let values = new vector::<DBValue>(3);
+            values.push_back(db_value.Int(42));
+            values.push_back(db_value.Text(new uni_string("James")));
+            values.push_back(db_value.Bool(true));
+            let row = new Row($values);
+
+            let id = (run table.insert(row))!;
+            let stored = (run table.read(id))!;
+
+            test.assertEqual(3, stored.count());
+            match stored.get(0)! {
+                Int(value) => { test.assertEqual(42, value); },
+                _ => { test.assertTrue(false); }
+            };
+            match stored.get(1)! {
+                Text(value) => {
+                    test.assertEqual(5, value.len());
+                    test.assertTrue(tableTestBytesEqual(
+                        value.cstr(), "James", 5));
+                },
+                _ => { test.assertTrue(false); }
+            };
+            match stored.get(2)! {
+                Bool(value) => { test.assertTrue(value); },
+                _ => { test.assertTrue(false); }
+            };
+
+            test.assertTrue((run table.remove(id))!);
+            test.assertTrue((run table.read(id)).isErr());
+        });
+
+        test.it("rejects rows that do not match its schema", fn () {
+            let table = tableTestCreate(
+                "/tmp/aflat-db-table-schema-validation-test.db")!;
+
+            let missing_values = new vector::<DBValue>(2);
+            missing_values.push_back(db_value.Int(42));
+            missing_values.push_back(
+                db_value.Text(new uni_string("James")));
+            let missing_column = new Row($missing_values);
+            test.assertTrue((run table.insert(missing_column)).isErr());
+
+            let wrong_values = new vector::<DBValue>(3);
+            wrong_values.push_back(
+                db_value.Text(new uni_string("not an int")));
+            wrong_values.push_back(
+                db_value.Text(new uni_string("James")));
+            wrong_values.push_back(db_value.Bool(true));
+            let wrong_type = new Row($wrong_values);
+            test.assertTrue((run table.insert(wrong_type)).isErr());
+        });
+
+        test.it("keeps inserted rows independent", fn () {
+            let table = tableTestCreate(
+                "/tmp/aflat-db-table-multiple-row-test.db")!;
+            let first_row = tableTestRow(1, "Alice", true);
+            let second_row = tableTestRow(2, "Bobby", false);
+
+            let first_id = (run table.insert(first_row))!;
+            let second_id = (run table.insert(second_row))!;
+            test.assertTrue((run table.remove(first_id))!);
+
+            test.assertTrue((run table.read(first_id)).isErr());
+            let second = (run table.read(second_id))!;
+            match second.get(0)! {
+                Int(value) => { test.assertEqual(2, value); },
+                _ => { test.assertTrue(false); }
+            };
+            match second.get(1)! {
+                Text(value) => {
+                    test.assertTrue(tableTestBytesEqual(
+                        value.cstr(), "Bobby", 5));
+                },
+                _ => { test.assertTrue(false); }
+            };
+            match second.get(2)! {
+                Bool(value) => { test.assertTrue(!value); },
+                _ => { test.assertTrue(false); }
+            };
+        });
+    });
+    return;
+};

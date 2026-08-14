@@ -1,0 +1,299 @@
+.needs <std>
+.needs <test>
+
+import {describe, it, assertEqual, assertTrue} from "ATest" under test;
+import {createPager, readDatabase} from "../../../Storage" under db;
+import SlottedPage from "../../../Pager/SlottedPage";
+import TableHeap from "../../../TableHeap";
+import Record, RecordView from "../../../Record";
+import TableSchema, ColumnSchema from "../../../Schemas";
+import DBType from "../../../Schemas/Types";
+import {Int, Long, Float, Text, Bool} from "../../../Schemas/Types" under db_type;
+import DBValue from "../../../DBValue";
+import {Null, Int, Long, Float, Text, Bool} from "../../../DBValue" under db_value;
+import Row from "../../../Row";
+import {encode, decode} from "../../../Row/Codec" under row_codec;
+import vector from "Collections/Vector";
+import uni_string from "uni_string";
+
+fn rowCodecBytesEqual(immutable adr actual, immutable adr expected, int size) -> bool {
+    mutable int index = 0;
+    mutable adr actual_cursor = actual;
+    mutable adr expected_cursor = expected;
+    while index < size {
+        if (actual_cursor as char) != (expected_cursor as char) {
+            return false;
+        };
+        actual_cursor = actual_cursor + 1;
+        expected_cursor = expected_cursor + 1;
+        index = index + 1;
+    };
+    return true;
+};
+
+fn rowCodecOneColumnSchema(DBType type, bool nullable) -> TableSchema {
+    let columns = new vector::<ColumnSchema>(1);
+    columns.push_back(new ColumnSchema(
+        new uni_string("value"), type, nullable));
+    let schema = new TableSchema(new uni_string("single"), $columns);
+    return schema;
+};
+
+fn rowCodecZeroRecord(int size) -> Record {
+    const adr bytes = af_malloc(size);
+    mutable adr cursor = bytes;
+    for int i = 0; i < size; i++ {
+        cursor =: '\0';
+        cursor = cursor + 1;
+    };
+    let record = new Record(new RecordView(bytes, size));
+    af_free(bytes);
+    return record;
+};
+
+fn rowCodecOneValueRecord(int payload_size) -> Record {
+    let record = rowCodecZeroRecord(5 + payload_size);
+    const int column_count = 1;
+    const bool is_null = false;
+    af_memcpy(record.data, ?column_count, 4);
+    af_memcpy(record.data + 4, ?is_null, 1);
+    return record;
+};
+
+export fn register() -> void {
+    test.describe("Row codec", fn () {
+        test.it("round trips all supported row value types", fn () {
+            let columns = new vector::<ColumnSchema>(6);
+            columns.push_back(new ColumnSchema(
+                new uni_string("id"), db_type.Int(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("large_id"), db_type.Long(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("score"), db_type.Float(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("active"), db_type.Bool(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("name"), db_type.Text(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("note"), db_type.Text(), true));
+            let schema = new TableSchema(
+                new uni_string("users"), $columns);
+
+            let values = new vector::<DBValue>(6);
+            values.push_back(db_value.Int(42));
+            const long large_id = #9000000000;
+            values.push_back(db_value.Long(large_id));
+            values.push_back(db_value.Float(3.14));
+            values.push_back(db_value.Bool(true));
+            values.push_back(db_value.Text(new uni_string("AFlatDB")));
+            values.push_back(db_value.Null());
+            let row = new Row($values);
+
+            let encoded = row_codec.encode(schema, row)!;
+            let decoded = row_codec.decode(schema, encoded)!;
+
+            test.assertEqual(6, decoded.count());
+
+            match decoded.get(0)! {
+                Int(value) => { test.assertEqual(42, value); },
+                _ => { test.assertTrue(false); }
+            };
+            match decoded.get(1)! {
+                Long(value) => { test.assertEqual(large_id, value); },
+                _ => { test.assertTrue(false); }
+            };
+            match decoded.get(2)! {
+                Float(value) => {
+                    const float expected = 3.14;
+                    test.assertTrue(rowCodecBytesEqual(?value, ?expected, 4));
+                },
+                _ => { test.assertTrue(false); }
+            };
+            match decoded.get(3)! {
+                Bool(value) => { test.assertTrue(value); },
+                _ => { test.assertTrue(false); }
+            };
+            match decoded.get(4)! {
+                Text(value) => {
+                    test.assertEqual(7, value.len());
+                    test.assertTrue(rowCodecBytesEqual(value.cstr(), "AFlatDB", 7));
+                },
+                _ => { test.assertTrue(false); }
+            };
+            match decoded.get(5)! {
+                Null => { test.assertTrue(true); },
+                _ => { test.assertTrue(false); }
+            };
+        });
+
+        test.it("rejects schema mismatches and invalid nulls", fn () {
+            let int_schema = rowCodecOneColumnSchema(db_type.Int(), false);
+            let text_schema = rowCodecOneColumnSchema(db_type.Text(), false);
+
+            let no_values = new vector::<DBValue>(1);
+            let empty_row = new Row($no_values);
+            test.assertTrue(row_codec.encode(int_schema, empty_row).isErr());
+
+            let text_values = new vector::<DBValue>(1);
+            text_values.push_back(
+                db_value.Text(new uni_string("not an int")));
+            let text_row = new Row($text_values);
+            test.assertTrue(row_codec.encode(int_schema, text_row).isErr());
+
+            let int_values = new vector::<DBValue>(1);
+            int_values.push_back(db_value.Int(42));
+            let int_row = new Row($int_values);
+            test.assertTrue(row_codec.encode(text_schema, int_row).isErr());
+
+            let null_values = new vector::<DBValue>(1);
+            null_values.push_back(db_value.Null());
+            let null_row = new Row($null_values);
+            test.assertTrue(row_codec.encode(int_schema, null_row).isErr());
+        });
+
+        test.it("rejects malformed and truncated row records", fn () {
+            let int_schema = rowCodecOneColumnSchema(db_type.Int(), false);
+            let long_schema = rowCodecOneColumnSchema(db_type.Long(), false);
+            let float_schema = rowCodecOneColumnSchema(db_type.Float(), false);
+            let bool_schema = rowCodecOneColumnSchema(db_type.Bool(), false);
+            let text_schema = rowCodecOneColumnSchema(db_type.Text(), false);
+
+            let too_short = rowCodecZeroRecord(3);
+            test.assertTrue(row_codec.decode(int_schema, too_short).isErr());
+
+            let wrong_count = rowCodecZeroRecord(4);
+            const int encoded_column_count = 2;
+            af_memcpy(wrong_count.data, ?encoded_column_count, 4);
+            test.assertTrue(row_codec.decode(int_schema, wrong_count).isErr());
+
+            let truncated_int = rowCodecOneValueRecord(3);
+            test.assertTrue(row_codec.decode(int_schema, truncated_int).isErr());
+
+            let truncated_long = rowCodecOneValueRecord(7);
+            test.assertTrue(row_codec.decode(long_schema, truncated_long).isErr());
+
+            let truncated_float = rowCodecOneValueRecord(3);
+            test.assertTrue(row_codec.decode(float_schema, truncated_float).isErr());
+
+            let truncated_bool = rowCodecOneValueRecord(0);
+            test.assertTrue(row_codec.decode(bool_schema, truncated_bool).isErr());
+
+            let truncated_text_length = rowCodecOneValueRecord(3);
+            test.assertTrue(row_codec.decode(
+                text_schema, truncated_text_length).isErr());
+
+            let oversized_text = rowCodecOneValueRecord(4);
+            const int claimed_text_size = 5;
+            af_memcpy(oversized_text.data + 5, ?claimed_text_size, 4);
+            test.assertTrue(row_codec.decode(text_schema, oversized_text).isErr());
+
+            let encoded_null = rowCodecZeroRecord(5);
+            const int one_column = 1;
+            const bool is_null = true;
+            af_memcpy(encoded_null.data, ?one_column, 4);
+            af_memcpy(encoded_null.data + 4, ?is_null, 1);
+            test.assertTrue(row_codec.decode(int_schema, encoded_null).isErr());
+
+            let trailing_data = rowCodecOneValueRecord(5);
+            const int int_value = 42;
+            af_memcpy(trailing_data.data + 5, ?int_value, 4);
+            test.assertTrue(row_codec.decode(int_schema, trailing_data).isErr());
+        });
+
+        test.it("preserves text edge cases independently of the record", fn () {
+            let columns = new vector::<ColumnSchema>(3);
+            columns.push_back(new ColumnSchema(
+                new uni_string("empty"), db_type.Text(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("spaces"), db_type.Text(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("punctuation"), db_type.Text(), false));
+            let schema = new TableSchema(
+                new uni_string("text_values"), $columns);
+
+            let values = new vector::<DBValue>(3);
+            values.push_back(db_value.Text(new uni_string("")));
+            values.push_back(db_value.Text(new uni_string("hello world")));
+            values.push_back(
+                db_value.Text(new uni_string("AFlatDB: test #42!")));
+            let row = new Row($values);
+
+            let encoded = row_codec.encode(schema, row)!;
+            let decoded = row_codec.decode(schema, encoded)!;
+            delete encoded;
+
+            match decoded.get(0)! {
+                Text(value) => { test.assertEqual(0, value.len()); },
+                _ => { test.assertTrue(false); }
+            };
+            match decoded.get(1)! {
+                Text(value) => {
+                    test.assertTrue(rowCodecBytesEqual(
+                        value.cstr(), "hello world", 11));
+                },
+                _ => { test.assertTrue(false); }
+            };
+            match decoded.get(2)! {
+                Text(value) => {
+                    test.assertTrue(rowCodecBytesEqual(
+                        value.cstr(), "AFlatDB: test #42!", 18));
+                },
+                _ => { test.assertTrue(false); }
+            };
+        });
+
+        test.it("persists and reconstructs a typed row through the table heap", fn () {
+            const adr path = "/tmp/aflat-db-row-persistence-test.db";
+
+            let columns = new vector::<ColumnSchema>(3);
+            columns.push_back(new ColumnSchema(
+                new uni_string("id"), db_type.Int(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("name"), db_type.Text(), false));
+            columns.push_back(new ColumnSchema(
+                new uni_string("active"), db_type.Bool(), false));
+            let schema = new TableSchema(new uni_string("users"), $columns);
+
+            let values = new vector::<DBValue>(3);
+            values.push_back(db_value.Int(42));
+            values.push_back(db_value.Text(new uni_string("James")));
+            values.push_back(db_value.Bool(true));
+            let row = new Row($values);
+            let encoded = row_codec.encode(schema, row)!;
+
+            let pager = (run db.createPager(path))!;
+            let table_raw = (run pager.allocatePage())!;
+            const long table_page_id = table_raw.id;
+            let table_page = new SlottedPage($table_raw);
+            table_page.initialize();
+            let initialized_raw = table_page.release();
+            let __initialized = (run pager.writePage(initialized_raw))!;
+
+            let heap = new TableHeap($pager, table_page_id);
+            let id = (run heap.insert(encoded.data, encoded.size))!;
+            heap.close();
+
+            let reopened_pager = (run db.readDatabase(path))!;
+            let reopened_heap = new TableHeap($reopened_pager, table_page_id);
+            let persisted_record = (run reopened_heap.read(id))!;
+            let decoded = row_codec.decode(schema, persisted_record)!;
+
+            match decoded.get(0)! {
+                Int(value) => { test.assertEqual(42, value); },
+                _ => { test.assertTrue(false); }
+            };
+            match decoded.get(1)! {
+                Text(value) => {
+                    test.assertTrue(rowCodecBytesEqual(value.cstr(), "James", 5));
+                },
+                _ => { test.assertTrue(false); }
+            };
+            match decoded.get(2)! {
+                Bool(value) => { test.assertTrue(value); },
+                _ => { test.assertTrue(false); }
+            };
+            reopened_heap.close();
+        });
+    });
+    return;
+};

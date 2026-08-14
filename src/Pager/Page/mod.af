@@ -1,0 +1,22 @@
+.needs <std>
+
+
+unique class Page {
+  long id = id;
+  mutable adr data = af_malloc(page_size);
+  
+  fn init(long id, int page_size) -> Self {
+    mutable adr cursor = my.data;
+    mutable int index = 0;
+    while index < page_size {
+      cursor =: '\0';
+      cursor = cursor + 1;
+      index = index + 1;
+    };
+    return my;
+  };
+
+  fn del() -> void {
+    af_free(my.data);
+  }
+};

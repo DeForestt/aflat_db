@@ -1,0 +1,272 @@
+.needs <std>
+
+import Page from "../Page";
+import File from "files";
+import Error from "Utils/Error";
+import RecordView from "../../Record";
+
+unique class SlottedPageHeader {
+    long nextPage = -1;
+    int slotCount = 0;
+    int freeEnd = 4096;
+
+    fn init() -> Self {
+        return my;
+    };
+};
+
+unique class Slot {
+    int offset;
+    int length;
+};
+
+
+unique class SlottedPage {
+    private Page page = $page;
+    private int HEADER_SIZE = 16;
+    private int SLOT_SIZE = 8;
+
+    fn init(Page &&page) -> Self {
+        return my;
+    };
+
+    fn initialize() -> void {
+      long nextPage = -1;
+      int slotCount = 0;
+      int free_end = 4096;
+      
+      af_memcpy(my.page.data, ?nextPage, 8);
+      af_memcpy(my.page.data + 8, ?slotCount, 4);
+      af_memcpy(my.page.data + 12, ?free_end, 4);
+
+      return;
+    };
+
+    safe fn id() -> long {
+      return my.page.id;
+    };
+
+    safe fn nextPage() -> long {
+      long value = -1;
+      af_memcpy(?value, my.page.data, 8);
+      return value;
+    };
+
+    fn setNextPage(long page_id) -> void {
+      af_memcpy(my.page.data, ?page_id, 8);
+      return;
+    };
+
+    safe fn slotCount() -> int {
+      int value = 0;
+      af_memcpy(?value, my.page.data + 8, 4);
+      return value;
+    };
+
+    safe fn freeEnd() -> int {
+      int value = 0;
+      af_memcpy(?value, my.page.data + 12, 4);
+      return value;
+    };
+
+    safe fn freeSpace() -> int {
+      return my.freeEnd() - my.freeStart();
+    };
+
+    safe fn freeStart() -> int {
+      return my.HEADER_SIZE + (my.slotCount() * my.SLOT_SIZE);
+    };
+
+    safe private fn allocateSlotId() -> int {
+      for int i = 0; i < my.slotCount(); i++ {
+        let slot_offset = my.HEADER_SIZE + (i * my.SLOT_SIZE);
+        int record_offset = 0;
+        af_memcpy(?record_offset, my.page.data + slot_offset, 4);
+        if record_offset == -1 return i;
+      };
+      return my.slotCount();
+    };
+
+    safe fn canInsert(int size) -> bool {
+        const int current_slot_count = my.slotCount();
+        const int slot_id = my.allocateSlotId();
+        const bool reusing_slot = slot_id < current_slot_count;
+
+        mutable int required_space = size;
+
+        if !reusing_slot {
+            required_space = required_space + my.SLOT_SIZE;
+        };
+
+        return my.freeSpace() >= required_space;
+    };
+
+    fn insert(immutable adr bytes, int size) -> int! {
+      if size <= 0 {
+        return new Error("Cannot insert an empty record");
+      };
+
+      const int current_slot_count = my.slotCount();
+      const int slot_id = my.allocateSlotId();
+      const bool reusing_slot = slot_id < current_slot_count;
+      mutable int required_space = size;
+      if !reusing_slot {
+        required_space = required_space + my.SLOT_SIZE;
+      };
+
+      if my.freeSpace() < required_space {
+        return new Error("SlottedPage is full");
+      };
+
+      let slot_offset = my.HEADER_SIZE + (slot_id * my.SLOT_SIZE);
+      let record_offset = my.freeEnd() - size;
+      
+      // update record data
+      af_memcpy(my.page.data + record_offset, bytes, size);
+      // update slot
+      af_memcpy(my.page.data + slot_offset, ?record_offset, 4);
+      af_memcpy(my.page.data + slot_offset + 4, ?size, 4);
+
+      // Update page metadata.
+      if !reusing_slot {
+        const let new_slot_count = current_slot_count + 1;
+        af_memcpy(my.page.data + 8, ?new_slot_count, 4);
+      };
+      af_memcpy(my.page.data + 12, ?record_offset, 4);
+
+      return slot_id;
+    };
+
+    fn read(int slot_id) -> RecordView! {
+      if (slot_id < 0) | (slot_id >= my.slotCount()) {
+            return new Error("Invalid slot ID");
+        };
+
+        let slot_offset = my.HEADER_SIZE + (slot_id * my.SLOT_SIZE);
+
+        int record_offset = 0;
+        int record_size = 0;
+
+        af_memcpy(?record_offset, my.page.data + slot_offset, 4);
+        af_memcpy(?record_size, my.page.data + slot_offset + 4, 4);
+
+        // -1 can mean deleted.
+        if record_offset < 0 {
+            return new Error("Record has been deleted");
+        };
+
+        if record_size <= 0 {
+            return new Error("Invalid record");
+        };
+
+        return new RecordView(
+            my.page.data + record_offset,
+            record_size
+        );
+    };
+
+
+     fn remove(int slot_id) -> bool! {
+        if (slot_id < 0) | (slot_id >= my.slotCount()) {
+            return new Error("Invalid slot ID");
+        };
+
+        const let slot_offset = my.HEADER_SIZE + (slot_id * my.SLOT_SIZE);
+
+        const int record_offset;
+        af_memcpy(?record_offset, my.page.data + slot_offset, 4);
+
+        if record_offset < 0 {
+            return new Error("Record already deleted");
+        };
+
+        const int deleted_offset = -1;
+        const int deleted_size = 0;
+        af_memcpy(my.page.data + slot_offset, ?deleted_offset, 4);
+        af_memcpy(my.page.data + slot_offset + 4, ?deleted_size, 4);
+        return true;
+    };
+
+    fn release() -> Page {
+        return my.page;
+    };
+
+    fn compact() -> int! {
+      const int page_size = 4096;
+      const int slot_count = my.slotCount();
+      const int old_free_end = my.freeEnd();
+      const adr records = af_malloc(page_size);
+      const adr record_sizes = af_malloc(slot_count * 4);
+      const adr record_offsets = af_malloc(slot_count * 4);
+      mutable int packed_size = 0;
+
+      // Copy live records out of the page before moving anything. This keeps
+      // compaction safe when source and destination ranges overlap.
+      for int slot_id = 0; slot_id < slot_count; slot_id++ {
+        const int slot_offset =
+            my.HEADER_SIZE + (slot_id * my.SLOT_SIZE);
+        int record_offset = 0;
+        int record_size = 0;
+        af_memcpy(?record_offset, my.page.data + slot_offset, 4);
+        af_memcpy(?record_size, my.page.data + slot_offset + 4, 4);
+
+        if record_offset < 0 {
+          const int deleted_size = 0;
+          af_memcpy(record_sizes + (slot_id * 4), ?deleted_size, 4);
+          continue;
+        };
+
+        if (record_size <= 0) |
+           (record_offset < old_free_end) |
+           ((record_offset + record_size) > page_size) |
+           ((packed_size + record_size) > page_size) {
+          af_free(records);
+          af_free(record_sizes);
+          af_free(record_offsets);
+          return new Error("Invalid record while compacting SlottedPage");
+        };
+
+        af_memcpy(records + packed_size,
+                  my.page.data + record_offset, record_size);
+        af_memcpy(record_sizes + (slot_id * 4), ?record_size, 4);
+        af_memcpy(record_offsets + (slot_id * 4), ?packed_size, 4);
+        packed_size = packed_size + record_size;
+      };
+
+      mutable int new_free_end = page_size;
+      for int slot_id = 0; slot_id < slot_count; slot_id++ {
+        int record_size = 0;
+        af_memcpy(?record_size, record_sizes + (slot_id * 4), 4);
+
+        if record_size > 0 {
+          int source_offset = 0;
+          af_memcpy(?source_offset, record_offsets + (slot_id * 4), 4);
+          new_free_end = new_free_end - record_size;
+          af_memcpy(my.page.data + new_free_end,
+                    records + source_offset, record_size);
+
+          const int slot_offset =
+              my.HEADER_SIZE + (slot_id * my.SLOT_SIZE);
+          af_memcpy(my.page.data + slot_offset, ?new_free_end, 4);
+        };
+      };
+
+      af_memcpy(my.page.data + 12, ?new_free_end, 4);
+      af_free(records);
+      af_free(record_sizes);
+      af_free(record_offsets);
+
+      return new_free_end - old_free_end;
+    };
+};
+
+export fn create(Page &&page) -> SlottedPage! {
+  let result = new SlottedPage($page);
+  result.initialize();
+  return result;
+};
+
+export fn open(Page &&page) -> SlottedPage! {
+  let result = new SlottedPage($page);
+  return result;
+};

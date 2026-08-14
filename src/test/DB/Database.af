@@ -1,0 +1,235 @@
+.needs <std>
+.needs <test>
+.needs <asm.gs>
+
+import {describe, it, assertTrue} from "ATest" under test;
+import Pager from "../../Pager";
+import {createPager, readDatabase, verifyDatabase} from "../../Storage" under db;
+import {openFile} from "files" under fs;
+
+class AllocationIds {
+    private adr values = af_malloc(50 * 8);
+    private mutable int length = 0;
+
+    fn init() -> Self {
+        return my;
+    };
+
+    fn push(long value) -> void {
+        af_memcpy(my.values + (my.length * 8), ?value, 8);
+        my.length = my.length + 1;
+        return;
+    };
+
+    fn count() -> int {
+        return my.length;
+    };
+
+    fn get(const int index) -> long {
+        const long value;
+        af_memcpy(?value, my.values + (index * 8), 8);
+        return value;
+    };
+
+    fn del() -> void {
+        af_free(my.values);
+    };
+};
+
+async fn allocateOnePage(Pager pager) -> long! {
+    let page = (await pager.allocatePage())!;
+    return page.id;
+};
+
+async fn stressAllocationsHaveUniqueIds() -> bool! {
+    const adr path = "/tmp/aflat-db-50-task-stress-test.db";
+    let pager = (await db.createPager(path))!;
+    let ids = new AllocationIds();
+    const let allocation_0 = spawn allocateOnePage(pager);
+    const let allocation_1 = spawn allocateOnePage(pager);
+    const let allocation_2 = spawn allocateOnePage(pager);
+    const let allocation_3 = spawn allocateOnePage(pager);
+    const let allocation_4 = spawn allocateOnePage(pager);
+    const let allocation_5 = spawn allocateOnePage(pager);
+    const let allocation_6 = spawn allocateOnePage(pager);
+    const let allocation_7 = spawn allocateOnePage(pager);
+    const let allocation_8 = spawn allocateOnePage(pager);
+    const let allocation_9 = spawn allocateOnePage(pager);
+    const let allocation_10 = spawn allocateOnePage(pager);
+    const let allocation_11 = spawn allocateOnePage(pager);
+    const let allocation_12 = spawn allocateOnePage(pager);
+    const let allocation_13 = spawn allocateOnePage(pager);
+    const let allocation_14 = spawn allocateOnePage(pager);
+    const let allocation_15 = spawn allocateOnePage(pager);
+    const let allocation_16 = spawn allocateOnePage(pager);
+    const let allocation_17 = spawn allocateOnePage(pager);
+    const let allocation_18 = spawn allocateOnePage(pager);
+    const let allocation_19 = spawn allocateOnePage(pager);
+    const let allocation_20 = spawn allocateOnePage(pager);
+    const let allocation_21 = spawn allocateOnePage(pager);
+    const let allocation_22 = spawn allocateOnePage(pager);
+    const let allocation_23 = spawn allocateOnePage(pager);
+    const let allocation_24 = spawn allocateOnePage(pager);
+    const let allocation_25 = spawn allocateOnePage(pager);
+    const let allocation_26 = spawn allocateOnePage(pager);
+    const let allocation_27 = spawn allocateOnePage(pager);
+    const let allocation_28 = spawn allocateOnePage(pager);
+    const let allocation_29 = spawn allocateOnePage(pager);
+    const let allocation_30 = spawn allocateOnePage(pager);
+    const let allocation_31 = spawn allocateOnePage(pager);
+    const let allocation_32 = spawn allocateOnePage(pager);
+    const let allocation_33 = spawn allocateOnePage(pager);
+    const let allocation_34 = spawn allocateOnePage(pager);
+    const let allocation_35 = spawn allocateOnePage(pager);
+    const let allocation_36 = spawn allocateOnePage(pager);
+    const let allocation_37 = spawn allocateOnePage(pager);
+    const let allocation_38 = spawn allocateOnePage(pager);
+    const let allocation_39 = spawn allocateOnePage(pager);
+    const let allocation_40 = spawn allocateOnePage(pager);
+    const let allocation_41 = spawn allocateOnePage(pager);
+    const let allocation_42 = spawn allocateOnePage(pager);
+    const let allocation_43 = spawn allocateOnePage(pager);
+    const let allocation_44 = spawn allocateOnePage(pager);
+    const let allocation_45 = spawn allocateOnePage(pager);
+    const let allocation_46 = spawn allocateOnePage(pager);
+    const let allocation_47 = spawn allocateOnePage(pager);
+    const let allocation_48 = spawn allocateOnePage(pager);
+    const let allocation_49 = spawn allocateOnePage(pager);
+
+    ids.push((await allocation_0)!);
+    ids.push((await allocation_1)!);
+    ids.push((await allocation_2)!);
+    ids.push((await allocation_3)!);
+    ids.push((await allocation_4)!);
+    ids.push((await allocation_5)!);
+    ids.push((await allocation_6)!);
+    ids.push((await allocation_7)!);
+    ids.push((await allocation_8)!);
+    ids.push((await allocation_9)!);
+    ids.push((await allocation_10)!);
+    ids.push((await allocation_11)!);
+    ids.push((await allocation_12)!);
+    ids.push((await allocation_13)!);
+    ids.push((await allocation_14)!);
+    ids.push((await allocation_15)!);
+    ids.push((await allocation_16)!);
+    ids.push((await allocation_17)!);
+    ids.push((await allocation_18)!);
+    ids.push((await allocation_19)!);
+    ids.push((await allocation_20)!);
+    ids.push((await allocation_21)!);
+    ids.push((await allocation_22)!);
+    ids.push((await allocation_23)!);
+    ids.push((await allocation_24)!);
+    ids.push((await allocation_25)!);
+    ids.push((await allocation_26)!);
+    ids.push((await allocation_27)!);
+    ids.push((await allocation_28)!);
+    ids.push((await allocation_29)!);
+    ids.push((await allocation_30)!);
+    ids.push((await allocation_31)!);
+    ids.push((await allocation_32)!);
+    ids.push((await allocation_33)!);
+    ids.push((await allocation_34)!);
+    ids.push((await allocation_35)!);
+    ids.push((await allocation_36)!);
+    ids.push((await allocation_37)!);
+    ids.push((await allocation_38)!);
+    ids.push((await allocation_39)!);
+    ids.push((await allocation_40)!);
+    ids.push((await allocation_41)!);
+    ids.push((await allocation_42)!);
+    ids.push((await allocation_43)!);
+    ids.push((await allocation_44)!);
+    ids.push((await allocation_45)!);
+    ids.push((await allocation_46)!);
+    ids.push((await allocation_47)!);
+    ids.push((await allocation_48)!);
+    ids.push((await allocation_49)!);
+
+    pager.close();
+
+    mutable bool ids_unique = ids.count() == 50;
+    mutable long minimum = ids.get(0);
+    mutable long maximum = minimum;
+    mutable int outer = 0;
+    while outer < ids.count() {
+        const long id = ids.get(outer);
+        if id < minimum { minimum = id; };
+        if id > maximum { maximum = id; };
+
+        mutable int inner = outer + 1;
+        while inner < ids.count() {
+            const long other_id = ids.get(inner);
+            if id == other_id { ids_unique = false; };
+            inner = inner + 1;
+        };
+        outer = outer + 1;
+    };
+
+    let file = fs.openFile(path)!;
+    const long file_size = sys_lseek(file.file, #0, 2);
+    const adr count_bytes = af_malloc(8);
+    const long count_read = await file.readBytesAtAsync(
+        count_bytes, 8, #16);
+    const long persisted_page_count;
+    af_memcpy(?persisted_page_count, count_bytes, 8);
+    af_free(count_bytes);
+    file.close();
+
+    return ids_unique &
+           (minimum == #2) &
+           (maximum == #51) &
+           (count_read == #8) &
+           (persisted_page_count == #52) &
+           (file_size == persisted_page_count * #4096);
+};
+
+async fn databaseReadReturnsRequestedPage() -> bool! {
+    const adr path = "/tmp/aflat-db-read-test.db";
+    let pager = (await db.createPager(path))!;
+
+    let page = (await pager.readPage(#1))!;
+    page.data =: 'R';
+    let __written = (await pager.writePage(page))!;
+    pager.close();
+
+    let reopened_pager = (await db.readDatabase(path))!;
+    let reopened_page = (await reopened_pager.readPage(#1))!;
+    const bool matches = (reopened_page.id == #1) &
+                         (reopened_page.data as char == 'R');
+    reopened_pager.close();
+    return matches;
+};
+export fn register() -> void {
+    test.describe("Database file creation", fn () {
+        test.it("writes a valid header and empty catalog page", fn () {
+            const adr path = "/tmp/aflat-db-create-test.db";
+            let pager = (run db.createPager(path))!;
+            pager.close();
+
+            test.assertTrue((run db.verifyDatabase(path))!);
+        });
+
+        test.it("stress tests 50 async page allocations", fn () {
+            test.assertTrue((run stressAllocationsHaveUniqueIds())!);
+        });
+
+        test.it("reopens the database and returns the requested page", fn () {
+            test.assertTrue((run databaseReadReturnsRequestedPage())!);
+        });
+
+        test.it("rejects a database with a corrupted header", fn () {
+            const adr path = "/tmp/aflat-db-corrupt-header-test.db";
+            let pager = (run db.createPager(path))!;
+            pager.close();
+
+            let file = fs.openFile(path)!;
+            file.write("BAD");
+            file.close();
+
+            test.assertTrue((run db.readDatabase(path)).isErr());
+        });
+    });
+    return;
+};

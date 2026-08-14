@@ -1,0 +1,35 @@
+.needs <std>
+
+unique class RecordId {
+    long pageId = pageId;
+    int slotId = slotId;
+
+    fn init(long pageId, int slotId) -> Self {
+        return my;
+    };
+};
+
+
+unique class RecordView {
+    adr data = data;
+    int size = size;
+
+    fn init(adr data, int size) -> Self {
+      return my;
+    };
+};
+
+
+unique class Record {
+  adr data = af_malloc(view.size);
+  int size = view.size;
+
+  fn init(immutable RecordView view) {
+    af_memcpy(my.data, view.data, my.size);
+    return my;
+  };
+
+  fn del() {
+    af_free(my.data);
+  };
+};
