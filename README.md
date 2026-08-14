@@ -21,12 +21,12 @@ Import the high-level database API and the value/schema types needed by your
 application:
 
 ```aflat
-import {createDatabase, openDatabase} from "aflat_db/mod" under db;
-import TableSchema, ColumnSchema from "aflat_db/Schemas";
-import {Int, Text, Bool} from "aflat_db/Schemas/Types" under db_type;
-import DBValue from "aflat_db/DBValue";
-import {Int, Text, Bool} from "aflat_db/DBValue" under db_value;
-import Row from "aflat_db/Row";
+import {createDatabase, openDatabase} from "./aflat_db" under db;
+import TableSchema, ColumnSchema from "./aflat_db/Schemas";
+import {Int, Text, Bool} from "./aflat_db/Schemas/Types" under db_type;
+import DBValue from "./aflat_db/DBValue";
+import {Int, Text, Bool} from "./aflat_db/DBValue" under db_value;
+import Row from "./aflat_db/Row";
 ```
 
 Create a database and a typed table:

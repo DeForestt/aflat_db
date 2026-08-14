@@ -94,13 +94,21 @@ unique class Database {
 };
 
 export async fn createDatabase(const adr path) -> Database! {
-    let pager = (await db.createPager(path))!;
+    let pager_result = await db.createPager(path);
+    if pager_result.isErr() {
+        return pager_result.unwrapErr();
+    };
+    let pager = pager_result.unwrap();
     let d_b = new Database($pager);
     return d_b;
 };
 
 export async fn openDatabase(const adr path) -> Database! {
-    let pager = (await db.readDatabase(path))!;
+    let pager_result = await db.readDatabase(path);
+    if pager_result.isErr() {
+        return pager_result.unwrapErr();
+    };
+    let pager = pager_result.unwrap();
     let d_b = new Database($pager);
     return d_b;
 };
