@@ -32,7 +32,8 @@ import Row from "./aflat_db/Row";
 Create a database and a typed table:
 
 ```aflat
-let database = (await db.createDatabase("example.db"))!;
+let database = (await db.createDatabase("example.db"))
+    .expect("unable to create database");
 
 let columns = [
     new ColumnSchema(`id`, db_type.Int(), false),
@@ -41,7 +42,8 @@ let columns = [
 ];
 
 let schema = new TableSchema(`users`, $columns);
-let users = (await database.createTable($schema))!;
+let users = (await database.createTable($schema))
+    .expect("unable to create users table");
 
 let row = new Row([
     db_value.Int(1),
@@ -49,15 +51,18 @@ let row = new Row([
     db_value.Bool(true),
 ]);
 
-let __id = (await users.insert(row))!;
+let __id = (await users.insert(row))
+    .expect("unable to insert row");
 database.close();
 ```
 
 Open an existing database and look up a table by name:
 
 ```aflat
-let database = (await db.openDatabase("example.db"))!;
-let users = (await database.table(`users`))!;
+let database = (await db.openDatabase("example.db"))
+    .expect("unable to open database");
+let users = (await database.table(`users`))
+    .expect("unable to find users table");
 database.close();
 ```
 
