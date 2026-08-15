@@ -1,5 +1,7 @@
 .needs <std>
 import uni_string from "uni_string";
+import Error from "Utils/Error";
+import {resultWrapper} from "Utils/result" under res;
 
 union DBValue {
     Null,
@@ -9,6 +11,47 @@ union DBValue {
     Bool(bool),
     Text(uni_string)
 
+    fn isNull() -> bool {
+      match my {
+        Null => return true,
+        _ => false,
+      };
+    };
+
+    fn asInt() -> int! {
+      match my {
+        Int(v) => return v,
+        _ => return new Error("DBValue is not an int"),
+      };
+    };
+
+    fn asLong() -> long! {
+      match my {
+        Long(v) => return v,
+        _ => return new Error("DBValue is not a long"),
+      };
+    };
+
+    fn asFloat() -> float! {
+      match my {
+        Float(v) => return v,
+        _ => return new Error("DBValue is not a float"),
+      };
+    };
+
+    fn asBool() -> bool! {
+      match my {
+        Bool(v) => return v,
+        _ => return new Error("DBValue is not a bool"),
+      };
+    };
+
+    fn asText() -> uni_string! {
+      match my {
+        Text(v) => return v,
+        _ => return new Error("DBValue is not text"),
+      };
+    };
 };
 
 export fn Null() -> DBValue {
