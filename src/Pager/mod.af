@@ -5,11 +5,13 @@ import Page from "./Page";
 import File from "files";
 import DBHeader from "../DBFile";
 import Error from "Utils/Error";
+import AsyncLock, LockGuard from "concurrency";
 
 unique class Pager {
   private File file = $file;
   private mutable DBHeader header = $header;
   private mutable bool allocating = false;
+  private AsyncLock operationLock = new AsyncLock();
   
   fn init(File &&file, DBHeader &&header) {
     return my;
@@ -17,6 +19,10 @@ unique class Pager {
 
   safe fn catalogPage() -> long {
     return my.header.catalogPage;
+  };
+
+  async fn operationGuard() -> LockGuard {
+    return await my.operationLock.guard();
   };
 
   async fn readHeader() -> bool! {

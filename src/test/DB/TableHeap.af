@@ -181,7 +181,7 @@ export fn register() -> void {
             verifier.close();
         });
 
-        test.it("serializes concurrent inserts across overflow pages", fn () {
+        test.it("serializes concurrent inserts across heap handles", fn () {
             const adr path = "/tmp/aflat-db-table-heap-concurrent-test.db";
             const int record_size = 1000;
             const adr bytes = af_malloc(record_size);
@@ -199,24 +199,25 @@ export fn register() -> void {
             page.initialize();
             let initialized_raw = page.release();
             let __initialized = (run pager.writePage(initialized_raw))!;
-            let heap = new TableHeap($pager, #1);
+            let first_heap = new TableHeap(pager, #1);
+            let second_heap = new TableHeap(pager, #1);
 
             const let insertion_0 =
-                spawn heap.insert(bytes, record_size);
+                spawn first_heap.insert(bytes, record_size);
             const let insertion_1 =
-                spawn heap.insert(bytes, record_size);
+                spawn second_heap.insert(bytes, record_size);
             const let insertion_2 =
-                spawn heap.insert(bytes, record_size);
+                spawn first_heap.insert(bytes, record_size);
             const let insertion_3 =
-                spawn heap.insert(bytes, record_size);
+                spawn second_heap.insert(bytes, record_size);
             const let insertion_4 =
-                spawn heap.insert(bytes, record_size);
+                spawn first_heap.insert(bytes, record_size);
             const let insertion_5 =
-                spawn heap.insert(bytes, record_size);
+                spawn second_heap.insert(bytes, record_size);
             const let insertion_6 =
-                spawn heap.insert(bytes, record_size);
+                spawn first_heap.insert(bytes, record_size);
             const let insertion_7 =
-                spawn heap.insert(bytes, record_size);
+                spawn second_heap.insert(bytes, record_size);
 
             let __id_0 = (run insertion_0)!;
             let __id_1 = (run insertion_1)!;

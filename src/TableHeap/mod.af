@@ -3,7 +3,7 @@ import Pager from "../Pager";
 import RecordId, RecordView, Record from "../Record";
 import {open, create} from "../Pager/SlottedPage" under slotted;
 import {resultWrapper, accept, reject} from "Utils/result" under res;
-import AsyncLock, LockGuard from "concurrency";
+import LockGuard from "concurrency";
 import TableScan from "./TableScan";
 import view from "Memory";
 import {loan} from "Memory" under box;
@@ -11,7 +11,6 @@ import {loan} from "Memory" under box;
 unique class TableHeap {
     private view::<Pager> pager = box.loan(pager);
     private long firstPage = firstPage;
-    private AsyncLock operationLock = new AsyncLock();
 
 
     fn init(Pager pager, long firstPage) -> Self {
@@ -19,7 +18,8 @@ unique class TableHeap {
     };
 
     async fn insert(immutable adr bytes, int size) -> RecordId! {
-        const LockGuard __guard = await my.operationLock.guard();
+        const LockGuard __guard =
+            await my.pager.view().operationGuard();
 
         if (size + 8) > (4096 - 16) {
           return new Error("Record is too large for a database page");
@@ -87,7 +87,8 @@ unique class TableHeap {
     };
 
     async fn read(immutable RecordId id) -> Record! {
-        const LockGuard __guard = await my.operationLock.guard();
+        const LockGuard __guard =
+            await my.pager.view().operationGuard();
 
         let raw = (await my.pager.view().readPage(id.pageId))!;
         let page = slotted.open($raw)!;
@@ -96,7 +97,8 @@ unique class TableHeap {
     };
 
     async fn remove(immutable RecordId id) -> bool! {
-        const LockGuard __guard = await my.operationLock.guard();
+        const LockGuard __guard =
+            await my.pager.view().operationGuard();
 
         let raw = (await my.pager.view().readPage(id.pageId))!;
         let page = slotted.open($raw)!;
@@ -111,7 +113,7 @@ unique class TableHeap {
 
     async fn update(immutable RecordId id, immutable adr bytes, int size) -> bool! {
       const LockGuard __guard =
-          await my.operationLock.guard();
+          await my.pager.view().operationGuard();
 
       let raw = (await my.pager.view().readPage(id.pageId))!;
       let page = slotted.open($raw)!;
@@ -125,6 +127,8 @@ unique class TableHeap {
     };
 
     async fn readRawPage(long pageId) -> Page! {
+      const LockGuard __guard =
+          await my.pager.view().operationGuard();
       return await my.pager.view().readPage(pageId);
     };
 
