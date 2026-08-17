@@ -1,11 +1,12 @@
 .needs <std>
-import RecordId, Record from "../Record";
+import Record from "../Record";
 
 unique class HeapRecord {
-    RecordId id = id;
+    long pageId = pageId;
+    int slotId = slotId;
     Record record = $record;
 
-    fn init(RecordId id, Record &&record) -> Self {
+    fn init(long pageId, int slotId, Record &&record) -> Self {
         return my;
     };
 };
