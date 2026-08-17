@@ -40,7 +40,15 @@ unique class RowScan {
         };
 
         let row = row.expect("expected row");
-        let tr = new TableRecord(heap_record.id, $row);
+        
+        // Give the decoded table record its own ID. Reusing the ID owned by
+        // heap_record leaves TableRecord pointing at freed memory once the
+        // intermediate heap record goes out of scope.
+        let id = new RecordId(
+            heap_record.id.pageId,
+            heap_record.id.slotId
+        );
+        let tr = new TableRecord($id, $row);
 
         return tr;
     };
