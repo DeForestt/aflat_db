@@ -97,13 +97,17 @@ unique class TableHeap {
     };
 
     async fn remove(immutable RecordId id) -> bool! {
+        return await my.removeAt(id.pageId, id.slotId);
+    };
+
+    async fn removeAt(long pageId, int slotId) -> bool! {
         const LockGuard __guard =
             await my.pager.view().operationGuard();
 
-        let raw = (await my.pager.view().readPage(id.pageId))!;
+        let raw = (await my.pager.view().readPage(pageId))!;
         let page = slotted.open($raw)!;
 
-        let __removed = page.remove(id.slotId)!;
+        let __removed = page.remove(slotId)!;
 
         let updated = page.release();
         let __ = (await my.pager.view().writePage(updated))!;
@@ -112,13 +116,17 @@ unique class TableHeap {
     };
 
     async fn update(immutable RecordId id, immutable adr bytes, int size) -> bool! {
+      return await my.updateAt(id.pageId, id.slotId, bytes, size);
+    };
+
+    async fn updateAt(long pageId, int slotId, immutable adr bytes, int size) -> bool! {
       const LockGuard __guard =
           await my.pager.view().operationGuard();
 
-      let raw = (await my.pager.view().readPage(id.pageId))!;
+      let raw = (await my.pager.view().readPage(pageId))!;
       let page = slotted.open($raw)!;
 
-      let __updated = page.update(id.slotId, bytes, size)!;
+      let __updated = page.update(slotId, bytes, size)!;
 
       let updated_raw = page.release();
       let __written = (await my.pager.view().writePage(updated_raw))!;

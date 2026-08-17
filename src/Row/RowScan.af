@@ -28,6 +28,12 @@ unique class RowScan {
 
         let heap_record = next.expect("expected heap record");
 
+        // Preserve the locator before decoding the record. Decoding borrows
+        // from heap_record, and reading its unique ID afterwards can leave us
+        // copying from an object whose lifetime has already ended.
+        const long page_id = heap_record.id.pageId;
+        const int slot_id = heap_record.id.slotId;
+
         let schema = my.schema.view();
 
         let row = row_codec.decode(
@@ -41,14 +47,9 @@ unique class RowScan {
 
         let row = row.expect("expected row");
         
-        // Give the decoded table record its own ID. Reusing the ID owned by
-        // heap_record leaves TableRecord pointing at freed memory once the
-        // intermediate heap record goes out of scope.
-        let id = new RecordId(
-            heap_record.id.pageId,
-            heap_record.id.slotId
-        );
-        let tr = new TableRecord($id, $row);
+        // Keep the locator as values. A nested unique RecordId would borrow
+        // from the temporary HeapRecord and become invalid after this call.
+        let tr = new TableRecord(page_id, slot_id, $row);
 
         return tr;
     };

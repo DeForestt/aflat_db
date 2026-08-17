@@ -1,12 +1,12 @@
 .needs <std>
-import RecordId from "../Record";
 import Row from "../Row";
 
 unique class TableRecord {
-    RecordId id = id;
+    long pageId = pageId;
+    int slotId = slotId;
     Row row = $row;
 
-    fn init(RecordId id, Row &&row) -> Self {
+    fn init(long pageId, int slotId, Row &&row) -> Self {
         return my;
     };
 };

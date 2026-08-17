@@ -32,9 +32,18 @@ unique class Table {
       return await my.heap.remove(id);
     };
 
+    async fn removeAt(long pageId, int slotId) -> bool! {
+      return await my.heap.removeAt(pageId, slotId);
+    };
+
     async fn update(immutable RecordId id, immutable Row row) -> bool! {
       let record = row_codec.encode(my.schema, row)!;
       return await my.heap.update(id, record.data, record.size);
+    };
+
+    async fn updateAt(long pageId, int slotId, immutable Row row) -> bool! {
+      let record = row_codec.encode(my.schema, row)!;
+      return await my.heap.updateAt(pageId, slotId, record.data, record.size);
     };
     
     fn scan() -> RowScan {
