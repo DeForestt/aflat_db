@@ -74,6 +74,6 @@ export fn Bool(bool value) -> DBValue {
   return new DBValue->Bool(value);
 };
 
-export fn Text(uni_string value) -> DBValue {
-  return new DBValue->Text(value);
+export fn Text(uni_string &&value) -> DBValue {
+  return new DBValue->Text($value);
 };

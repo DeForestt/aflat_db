@@ -253,7 +253,7 @@ export fn decode(immutable TableSchema schema, immutable Record record) -> Row! 
           af_free(text_bytes);
           cursor = cursor + text_size;
           remaining = remaining - text_size;
-          values.push_back(db_value.Text(text));
+          values.push_back(db_value.Text($text));
         }
       };
     };
