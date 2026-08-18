@@ -1,0 +1,38 @@
+.needs <std>
+import DBValue from "../DBValue";
+import RecordId from "../Record";
+import owned from "Memory";
+import {own} from "Memory" under box;
+import uni_string from "uni_string";
+
+unique class IndexEntry {
+  owned::<DBValue> key = box.own($key);
+  owned::<RecordId> id = box.own($id);
+
+  fn init(DBValue &&key, RecordId &&id) -> Self {
+    return my;
+  };
+};
+
+unique class IndexSchema {
+    uni_string name = $name;
+    int column = column;
+    bool _unique = _unique;
+
+    fn init(uni_string &&name, int column, long rootPage, bool _unique) {
+      return my;
+    };
+};
+
+unique class IndexMetadata {
+  private IndexSchema schema = $schema;
+  long rootPage;
+
+  fn init(IndexSchema &&schema, long rootPage) {
+    return my;
+  };
+
+  fn getSchema() -> loan IndexSchema {
+    return my.schema;
+  };
+};
