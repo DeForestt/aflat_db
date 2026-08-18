@@ -163,7 +163,7 @@ export fn decode(immutable adr bytes, int size) -> TableCatalogEntry! {
     remaining = remaining - 1;
 
     columns.push_back(new ColumnSchema(
-      $column_name, column_type, nullable));
+      $column_name, $column_type, nullable));
   };
 
   if remaining != 0 {

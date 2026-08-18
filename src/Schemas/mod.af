@@ -3,13 +3,14 @@ import uni_string from "uni_string";
 import DBType from "./Types";
 import vector from "Collections/Vector";
 import view from "Memory";
+import IndexSchema from "../Index";
 
 unique class ColumnSchema {
     uni_string name = $name;
-    DBType type = type;
+    DBType type = $type;
     bool nullable = nullable;
 
-    fn init(uni_string &&name, DBType type, bool nullable) -> Self {
+    fn init(uni_string &&name, DBType &&type, bool nullable) -> Self {
         return my;
     };
 };
@@ -17,8 +18,9 @@ unique class ColumnSchema {
 unique class TableSchema {
     uni_string name = $name;
     vector::<ColumnSchema> columns = $columns;
+    vector::<IndexSchema> indexes = $indexes;
 
-    fn init(uni_string &&name, vector::<ColumnSchema> &&columns) -> Self {
+    fn init(uni_string &&name, vector::<ColumnSchema> &&columns, vector::<IndexSchema> &&indexes) -> Self {
         return my;
     };
 

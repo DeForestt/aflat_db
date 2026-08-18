@@ -31,10 +31,10 @@ fn rowCodecBytesEqual(immutable adr actual, immutable adr expected, int size) ->
     return true;
 };
 
-fn rowCodecOneColumnSchema(DBType type, bool nullable) -> TableSchema {
+fn rowCodecOneColumnSchema(DBType &&type, bool nullable) -> TableSchema {
     let columns = new vector::<ColumnSchema>(1);
     columns.push_back(new ColumnSchema(
-        new uni_string("value"), type, nullable));
+        new uni_string("value"), $type, nullable));
     let schema = new TableSchema(new uni_string("single"), $columns);
     return schema;
 };

@@ -256,7 +256,7 @@ unique class SlottedPage {
     };
 
     fn release() -> Page {
-        return my.page;
+        return $my.page;
     };
 
     fn compact() -> int! {
