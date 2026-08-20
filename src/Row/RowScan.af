@@ -44,7 +44,7 @@ unique class RowScan {
           return;
         };
 
-        let row = row.expect("expected row");
+        let row = $row.expect("expected row");
         
         // Keep the locator as values rather than nesting a borrowed RecordId.
         let tr = new TableRecord(page_id, slot_id, $row);

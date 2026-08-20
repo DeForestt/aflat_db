@@ -9,6 +9,7 @@ import Catalog, TableCatalogEntry from "../../TableCatalog";
 import TableSchema, ColumnSchema from "../../Schemas";
 import vector from "Collections/Vector";
 import uni_string from "uni_string";
+import IndexMetadata from "../../Index";
 
 fn tableCatalogTestEntry(
     immutable adr name,
@@ -17,7 +18,8 @@ fn tableCatalogTestEntry(
     let columns = new vector::<ColumnSchema>(0);
     let schema = new TableSchema(new uni_string(name), $columns);
     return new TableCatalogEntry(
-        new uni_string(name), first_page, $schema);
+        new uni_string(name), first_page, $schema,
+        new vector::<IndexMetadata>());
 };
 
 export fn register() -> void {
@@ -34,7 +36,8 @@ export fn register() -> void {
             let schema = new TableSchema(
                 new uni_string("users"), $columns);
             let entry = new TableCatalogEntry(
-                new uni_string("users"), table_page_id, $schema);
+                new uni_string("users"), table_page_id, $schema,
+                new vector::<IndexMetadata>());
             test.assertTrue((run catalog.addTable(entry))!);
             catalog.close();
 

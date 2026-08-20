@@ -5,22 +5,29 @@ import Row from "../Row";
 import RecordId from "../Record";
 import RowScan from "../Row/RowScan";
 import {encode, decode} from "../Row/Codec" under row_codec;
+import vector from "Collections/Vector";
+import Index from "../Index";
 
 unique class Table {
     private TableHeap heap = $heap;
     private TableSchema schema = $schema;
+    private vector::<Index> indexes = $indexes;
 
-    fn init(TableHeap &&heap, TableSchema &&schema) -> Self {
+    fn init(TableHeap &&heap, TableSchema &&schema, vector::<Index> &&indexes) -> Self {
         return my;
     };
 
     async fn insert(immutable Row row) -> RecordId! {
       let record = row_codec.encode(my.schema, row)!;
 
-      return await my.heap.insert(
-        record.data,
-        record.size
-      );
+      let id = (await my.heap.insert(record.data, record.size))!;
+
+      foreach index in my.indexes {
+        let key = row.get(index.view().getSchema().column)!;
+        let __insert = (await index.view().insert($key, id.clone()))!;
+      };
+
+      return id;
     };
 
     async fn read(immutable RecordId id) -> Row! {

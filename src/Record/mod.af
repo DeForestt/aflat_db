@@ -7,6 +7,10 @@ unique class RecordId {
     fn init(long pageId, int slotId) -> Self {
         return my;
     };
+
+    fn clone() -> RecordId {
+      return new RecordId(my.pageId, my.slotId);
+    }
 };
 
 

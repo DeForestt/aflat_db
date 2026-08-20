@@ -5,13 +5,16 @@ import TableSchema from "../Schemas";
 import {encodedSize, encode, decode} from "./EntryCodec.af" under codec;
 import owned from "Memory";
 import {own} from "Memory" under box;
+import vector from "Collections/Vector";
+import IndexMetadata from "../Index";
 
 unique class TableCatalogEntry {
   uni_string name = $name;
   long firstPage = firstPage;
   owned::<TableSchema> schema = box.own($schema);
+  vector::<IndexMetadata> indexes = $indexes;
 
-  fn init(uni_string &&name, long firstPage, TableSchema &&schema) {
+  fn init(uni_string &&name, long firstPage, TableSchema &&schema, vector::<IndexMetadata> &&indexes) {
     return my;
   };
 };

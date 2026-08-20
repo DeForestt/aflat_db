@@ -52,6 +52,110 @@ union DBValue {
         _ => return new Error("DBValue is not text"),
       };
     };
+
+    private fn compareInt(immutable DBValue other) -> int! {
+      match other {
+        Int(other_value) => {
+          match my {
+            Int(value) => {
+              if value < other_value return -1;
+              if value > other_value return 1;
+              return 0;
+            },
+            _ => return new Error("DBValue is not an int"),
+          };
+        },
+        _ => return new Error("DBValue is not an int"),
+      };
+    };
+
+    private fn compareLong(immutable DBValue other) -> int! {
+      match other {
+        Long(other_value) => {
+          match my {
+            Long(value) => {
+              if value < other_value return -1;
+              if value > other_value return 1;
+              return 0;
+            },
+            _ => return new Error("DBValue is not a long"),
+          };
+        },
+        _ => return new Error("DBValue is not a long"),
+      };
+    };
+
+    private fn compareFloat(immutable DBValue other) -> int! {
+      match other {
+        Float(other_value) => {
+          match my {
+            Float(value) => {
+              if value < other_value return -1;
+              if value > other_value return 1;
+              return 0;
+            },
+            _ => return new Error("DBValue is not a float"),
+          };
+        },
+        _ => return new Error("DBValue is not a float"),
+      };
+    };
+
+    private fn compareBool(immutable DBValue other) -> int! {
+      match other {
+        Bool(other_value) => {
+          match my {
+            Bool(value) => {
+              if value == other_value return 0;
+              if !value return -1;
+              return 1;
+            },
+            _ => return new Error("DBValue is not a bool"),
+          };
+        },
+        _ => return new Error("DBValue is not a bool"),
+      };
+    };
+
+    private fn compareText(immutable DBValue other) -> int! {
+      match other {
+        Text(other_value) => {
+          match my {
+            Text(value) => {
+              const int shared_length = if value.len() < other_value.len()
+                value.len()
+              else
+                other_value.len();
+
+              for mutable int i = 0; i < shared_length; i = i + 1 {
+                if value.at(i) < other_value.at(i) return -1;
+                if value.at(i) > other_value.at(i) return 1;
+              };
+
+              if value.len() < other_value.len() return -1;
+              if value.len() > other_value.len() return 1;
+              return 0;
+            },
+            _ => return new Error("DBValue is not text"),
+          };
+        },
+        _ => return new Error("DBValue is not text"),
+      };
+    };
+
+    fn compare(immutable DBValue other) -> int! {
+      match my {
+        Null => {
+          if other.isNull() return 0;
+          return new Error("Cannot compare DBValues of different types");
+        },
+        Int() => return my.compareInt(other),
+        Long() => return my.compareLong(other),
+        Float() => return my.compareFloat(other),
+        Bool() => return my.compareBool(other),
+        Text() => return my.compareText(other),
+      };
+    };
 };
 
 export fn Null() -> DBValue {

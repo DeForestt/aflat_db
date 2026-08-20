@@ -14,6 +14,7 @@ import {Int, Text, Bool} from "../../DBValue" under db_value;
 import Row from "../../Row";
 import vector from "Collections/Vector";
 import uni_string from "uni_string";
+import Index from "../../Index";
 
 fn tableTestBytesEqual(
     immutable adr actual,
@@ -51,7 +52,7 @@ fn tableTestCreate(immutable adr path) -> Table! {
     let schema = new TableSchema(new uni_string("users"), $columns);
 
     let heap = new TableHeap($pager, table_page_id);
-    let table = new Table($heap, $schema);
+    let table = new Table($heap, $schema, new vector::<Index>());
     return table;
 };
 
@@ -86,7 +87,8 @@ export fn register() -> void {
                 new uni_string("users"), $columns);
 
             let heap = new TableHeap($pager, table_page_id);
-            let table = new Table($heap, $schema);
+            let table = new Table(
+                $heap, $schema, new vector::<Index>());
 
             let values = new vector::<DBValue>(3);
             values.push_back(db_value.Int(42));

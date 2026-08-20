@@ -8,6 +8,7 @@ import {Int, Long, Float, Bool, Text} from "../../../Schemas/Types" under db_typ
 import {encodedSize, encode, decode} from "../../../TableCatalog/EntryCodec" under codec;
 import vector from "Collections/Vector";
 import uni_string from "uni_string";
+import IndexMetadata from "../../../Index";
 
 fn catalogCodecBytesEqual(
     immutable adr actual,
@@ -37,7 +38,8 @@ fn catalogCodecUsersEntry() -> TableCatalogEntry {
     let schema = new TableSchema(new uni_string("users"), $columns);
 
     return new TableCatalogEntry(
-        new uni_string("users"), #42, $schema);
+        new uni_string("users"), #42, $schema,
+        new vector::<IndexMetadata>());
 };
 
 fn catalogCodecAllTypesEntry() -> TableCatalogEntry {
@@ -56,7 +58,8 @@ fn catalogCodecAllTypesEntry() -> TableCatalogEntry {
 
     const long first_page = #9876543 * #1000;
     return new TableCatalogEntry(
-        new uni_string("all_types"), first_page, $schema);
+        new uni_string("all_types"), first_page, $schema,
+        new vector::<IndexMetadata>());
 };
 
 export fn register() -> void {

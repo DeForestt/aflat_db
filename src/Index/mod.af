@@ -4,6 +4,9 @@ import RecordId from "../Record";
 import owned from "Memory";
 import {own} from "Memory" under box;
 import uni_string from "uni_string";
+import Pager from "../Pager";
+import Error from "Utils/Error";
+import {reject, resultWrapper} from "Utils/result" under result;
 
 unique class IndexEntry {
   owned::<DBValue> key = box.own($key);
@@ -19,14 +22,14 @@ unique class IndexSchema {
     int column = column;
     bool _unique = _unique;
 
-    fn init(uni_string &&name, int column, long rootPage, bool _unique) {
+    fn init(uni_string &&name, int column, bool _unique) {
       return my;
     };
 };
 
 unique class IndexMetadata {
   private IndexSchema schema = $schema;
-  long rootPage;
+  long rootPage = rootPage;
 
   fn init(IndexSchema &&schema, long rootPage) {
     return my;
@@ -35,4 +38,29 @@ unique class IndexMetadata {
   fn getSchema() -> loan IndexSchema {
     return my.schema;
   };
+};
+
+unique class Index {
+    private loan Pager pager = pager;
+    private IndexMetadata metadata = $metadata;
+
+    fn init(Pager pager, IndexMetadata &&metadata) -> Self {
+      return my;
+    };
+
+    fn getSchema() -> loan IndexSchema {
+      return my.metadata.getSchema();
+    }
+
+    async fn insert(DBValue &&key, RecordId &&id) -> bool! {
+      return new Error("Index insertion is not implemented");
+    };
+
+    async fn find(immutable DBValue key) -> RecordId! {
+      return new Error("Index lookup is not implemented");
+    };
+
+    async fn remove(immutable DBValue key, immutable RecordId id) -> bool! {
+      return new Error("Index removal is not implemented");
+    };
 };

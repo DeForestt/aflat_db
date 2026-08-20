@@ -5,6 +5,7 @@ import {fromTypeTag} from "../Schemas/Types" under db_type;
 import Error from "Utils/Error";
 import vector from "Collections/Vector";
 import uni_string from "uni_string";
+import IndexMetadata from "../Index";
 
 export fn encodedSize(
     immutable TableCatalogEntry entry
@@ -173,7 +174,8 @@ export fn decode(immutable adr bytes, int size) -> TableCatalogEntry! {
   let schema = new TableSchema(
     new uni_string(table_name.cstr()), $columns);
   let entry = new TableCatalogEntry(
-    new uni_string(table_name.cstr()), first_page, $schema);
+    new uni_string(table_name.cstr()), first_page, $schema,
+    new vector::<IndexMetadata>());
   return entry;
 
 };

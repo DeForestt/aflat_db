@@ -103,7 +103,7 @@ unique class Pager {
     let page_result = await my.writePage(page);
     if page_result.isErr() {
       my.allocating = false;
-      return page_result.unwrapErr();
+      return $page_result.unwrapErr();
     };
     
     my.header.pageCount = my.header.pageCount + 1;
@@ -111,7 +111,7 @@ unique class Pager {
     let header_result = await my.writeHeader();
     if header_result.isErr() {
       my.allocating = false;
-      return header_result.unwrapErr();
+      return $header_result.unwrapErr();
     };
 
     my.allocating = false;

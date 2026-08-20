@@ -37,7 +37,7 @@ export async fn readDatabase(const adr path) -> Pager! {
     let header_result = await pager.readHeader();
     if header_result.isErr() {
         pager.close();
-        return header_result.unwrapErr();
+        return $header_result.unwrapErr();
     };
 
     return pager;
