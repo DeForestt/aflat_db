@@ -32,10 +32,9 @@ unique class Database {
       let entry = (await catalog.findTable(name.cstr(), name.len()))!;
 
       let table_heap = new TableHeap(my.pager, entry.firstPage);
-      let table_schema = entry.schema.release();
+      let table_schema = entry.getSchema();
 
-      let tab = new Table(
-          $table_heap, $table_schema, new vector::<Index>());
+      let tab = new Table($table_heap, $table_schema, new vector::<Index>());
 
       return tab;
     };
@@ -81,7 +80,7 @@ unique class Database {
         let __added = (await catalog.addTable(entry))!;
 
         // Take the schema back out for the live Table object.
-        let table_schema = entry.schema.release();
+        let table_schema = entry.getSchema();
 
         let table_heap = new TableHeap(
             my.pager,

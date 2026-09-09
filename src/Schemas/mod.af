@@ -28,7 +28,7 @@ unique class TableSchema {
       return my.columns.count();
     };
 
-    fn column(int i) -> view::<ColumnSchema>! {
+    fn column(int i) -> &ColumnSchema! {
       return my.columns.get(i).toResult("Failed to find spesified column");
     };
 };

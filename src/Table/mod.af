@@ -23,8 +23,8 @@ unique class Table {
       let id = (await my.heap.insert(record.data, record.size))!;
 
       foreach index in my.indexes {
-        let key = row.get(index.view().getSchema().column)!;
-        let __insert = (await index.view().insert($key, id.clone()))!;
+        let key = row.get(index.getSchema().column)!;
+        let __insert = (await index.iew().insert($key, id.clone()))!;
       };
 
       return id;

@@ -21,10 +21,11 @@ unique class TableScan {
     if my.complete return;
     let heap = my.heap.view();
     while true {
-        let raw = match (await heap.readRawPage(my.pageId)) {
+        let raw = match $(await heap.readRawPage(my.pageId)) {
           Ok(&&value) => value,
           Err => return NULL,
         };
+
         let page = slotted.open($raw).expect("should be open");
 
         while my.slotId < page.slotCount() {
@@ -40,7 +41,7 @@ unique class TableScan {
             let record_view = $val.expect("should not be an error");
             let record = new Record(record_view);
             let heap_record = new HeapRecord(my.pageId, current_slot, $record);
-            return opt.Some(heap_record);
+            return opt.Some($heap_record);
         };
 
         const long next_page = page.nextPage();

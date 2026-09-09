@@ -17,6 +17,11 @@ unique class TableCatalogEntry {
   fn init(uni_string &&name, long firstPage, TableSchema &&schema, vector::<IndexMetadata> &&indexes) {
     return my;
   };
+
+  fn getSchema() -> TableSchema {
+    let schema = $my.schema;
+    return $schema.release();
+  }
 };
 
 private fn tableNameMatches(
@@ -78,7 +83,7 @@ unique class Catalog {
             return new Error("Table not found");
         };
 
-        let heap_record = next.toResult("Failed to get record")!;
+        let heap_record = $next.toResult("Failed to get record")!;
         const let entry = codec.decode(
             heap_record.record.data,
             heap_record.record.size

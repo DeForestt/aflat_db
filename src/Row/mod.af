@@ -14,11 +14,11 @@ unique class Row {
     return my.values.count();
   };
 
-  fn get(int i) -> DBValue! {
+  fn get(int i) -> &DBValue! {
     return my.values.get(i).toResult("Failed To find Expected DBValue");
   };
 
-  fn next() -> DBValue? {
+  fn next() -> &DBValue? {
     return my.values.next();
   };
 };

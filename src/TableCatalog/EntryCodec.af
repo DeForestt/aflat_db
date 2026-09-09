@@ -20,7 +20,7 @@ export fn encodedSize(
     immutable let schema = entry.schema.view();
     foreach column in schema.columns {
         size = size + 4;                          // column name length
-        size = size + column.view().name.len();   // column name
+        size = size + column.name.len();   // column name
         size = size + 4;                          // type tag
         size = size + 1;                          // nullable
     };
@@ -53,18 +53,18 @@ export fn encode(immutable TableCatalogEntry schema, mutable adr cursor) -> int!
   
   // now for the columns
   foreach column in table_schema.columns {
-    let column_name_length = column.view().name.len();
+    let column_name_length = column.name.len();
     af_memcpy(cursor, ?column_name_length, 4);
     cursor = cursor + 4;
 
-    af_memcpy(cursor, column.view().name.cstr(), column_name_length);
+    af_memcpy(cursor, column.name.cstr(), column_name_length);
     cursor = cursor + column_name_length;
 
-    let type_tag = column.view().type.toTypeTag();
+    let type_tag = column.type.toTypeTag();
     af_memcpy(cursor, ?type_tag, 4);
     cursor = cursor + 4;
 
-    let nullable = column.view().nullable;
+    let nullable = column.nullable;
     af_memcpy(cursor, ?nullable, 1);
     cursor = cursor + 1;
   };
