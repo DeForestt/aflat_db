@@ -18,7 +18,7 @@ private fn encodedSize(immutable TableSchema schema, immutable Row row) -> int! 
   for int i = 0; i < schema.columnCount(); i++ {
     size = size + 1; // add size of null flag
     let value = row.get(i)!;
-    let column = schema.column(i)!.view();
+    let column = schema.column(i)!;
     
     match value {
       Null => {
