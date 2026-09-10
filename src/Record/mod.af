@@ -10,7 +10,9 @@ unique class RecordId {
 
     fn clone() -> RecordId {
       return new RecordId(my.pageId, my.slotId);
-    }
+    };
+
+    fn del() -> void {};
 };
 
 
@@ -21,6 +23,8 @@ unique class RecordView {
     fn init(adr data, int size) -> Self {
       return my;
     };
+
+    fn del() -> void {};
 };
 
 

@@ -24,7 +24,7 @@ unique class Table {
 
       foreach index in my.indexes {
         let key = row.get(index.getSchema().column)!;
-        let __insert = (await index.iew().insert($key, id.clone()))!;
+        let __insert = (await index.insert(key.clone(), id.clone()))!;
       };
 
       return id;

@@ -135,34 +135,34 @@ export fn register() -> void {
                 decoded.name.cstr(), "all_types", 9));
             const long expected_first_page = #9876543 * #1000;
             test.assertEqual(expected_first_page, decoded.firstPage);
-            let decoded_schema = decoded.schema.release();
+            let decoded_schema = $decoded.getSchema();
             test.assertEqual(5, decoded_schema.columnCount());
 
-            let id = decoded_schema.column(0)!.view();
+            let id = decoded_schema.column(0)!;
             test.assertTrue(catalogCodecBytesEqual(
                 id.name.cstr(), "id", 2));
             test.assertTrue(id.type.isInt());
             test.assertTrue(!id.nullable);
 
-            let sequence = decoded_schema.column(1)!.view();
+            let sequence = decoded_schema.column(1)!;
             test.assertTrue(catalogCodecBytesEqual(
                 sequence.name.cstr(), "sequence", 8));
             test.assertTrue(sequence.type.isLong());
             test.assertTrue(!sequence.nullable);
 
-            let score = decoded_schema.column(2)!.view();
+            let score = decoded_schema.column(2)!;
             test.assertTrue(catalogCodecBytesEqual(
                 score.name.cstr(), "score", 5));
             test.assertTrue(score.type.isFloat());
             test.assertTrue(score.nullable == true);
 
-            let active = decoded_schema.column(3)!.view();
+            let active = decoded_schema.column(3)!;
             test.assertTrue(catalogCodecBytesEqual(
                 active.name.cstr(), "active", 6));
             test.assertTrue(active.type.isBool());
             test.assertTrue(!active.nullable);
 
-            let name = decoded_schema.column(4)!.view();
+            let name = decoded_schema.column(4)!;
             test.assertTrue(catalogCodecBytesEqual(
                 name.name.cstr(), "name", 4));
             test.assertTrue(name.type.isText());

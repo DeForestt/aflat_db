@@ -11,6 +11,17 @@ union DBValue {
     Bool(bool),
     Text(uni_string)
 
+    safe fn clone() -> DBValue {
+      match my {
+        Null => return new DBValue->Null(),
+        Int(value) => return new DBValue->Int(value),
+        Long(value) => return new DBValue->Long(value),
+        Float(value) => return new DBValue->Float(value),
+        Bool(value) => return new DBValue->Bool(value),
+        Text(value) => return new DBValue->Text(value.clone()),
+      };
+    };
+
     fn isNull() -> bool {
       match my {
         Null => return true,

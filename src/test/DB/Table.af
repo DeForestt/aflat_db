@@ -4,6 +4,7 @@
 
 import {describe, it, assertEqual, assertTrue} from "ATest" under test;
 import {createPager} from "../../Storage" under db;
+import Pager from "../../Pager";
 import SlottedPage from "../../Pager/SlottedPage";
 import TableHeap from "../../TableHeap";
 import Table from "../../Table";
@@ -33,8 +34,7 @@ fn tableTestBytesEqual(
     return true;
 };
 
-fn tableTestCreate(immutable adr path) -> Table! {
-    let pager = (run db.createPager(path))!;
+fn tableTestCreate(Pager pager) -> Table! {
     let raw = (run pager.allocatePage())!;
     const long table_page_id = raw.id;
     let page = new SlottedPage($raw);
@@ -51,7 +51,7 @@ fn tableTestCreate(immutable adr path) -> Table! {
         new uni_string("active"), db_type.Bool(), false));
     let schema = new TableSchema(new uni_string("users"), $columns);
 
-    let heap = new TableHeap($pager, table_page_id);
+    let heap = new TableHeap(pager, table_page_id);
     let table = new Table($heap, $schema, new vector::<Index>());
     return table;
 };
@@ -86,7 +86,7 @@ export fn register() -> void {
             let schema = new TableSchema(
                 new uni_string("users"), $columns);
 
-            let heap = new TableHeap($pager, table_page_id);
+            let heap = new TableHeap(pager, table_page_id);
             let table = new Table(
                 $heap, $schema, new vector::<Index>());
 
@@ -122,8 +122,9 @@ export fn register() -> void {
         });
 
         test.it("rejects rows that do not match its schema", fn () {
-            let table = tableTestCreate(
-                "/tmp/aflat-db-table-schema-validation-test.db")!;
+            let pager = (run db.createPager(
+                "/tmp/aflat-db-table-schema-validation-test.db"))!;
+            let table = tableTestCreate(pager)!;
 
             let missing_values = new vector::<DBValue>(2);
             missing_values.push_back(db_value.Int(42));
@@ -143,8 +144,9 @@ export fn register() -> void {
         });
 
         test.it("keeps inserted rows independent", fn () {
-            let table = tableTestCreate(
-                "/tmp/aflat-db-table-multiple-row-test.db")!;
+            let pager = (run db.createPager(
+                "/tmp/aflat-db-table-multiple-row-test.db"))!;
+            let table = tableTestCreate(pager)!;
             let first_row = tableTestRow(1, "Alice", true);
             let second_row = tableTestRow(2, "Bobby", false);
 
@@ -172,8 +174,9 @@ export fn register() -> void {
         });
 
         test.it("updates and reads a typed row by record ID", fn () {
-            let table = tableTestCreate(
-                "/tmp/aflat-db-table-update-test.db")!;
+            let pager = (run db.createPager(
+                "/tmp/aflat-db-table-update-test.db"))!;
+            let table = tableTestCreate(pager)!;
             let original_row = tableTestRow(1, "Al", false);
             let retained_row = tableTestRow(2, "Bobby", true);
             let replacement_row = tableTestRow(

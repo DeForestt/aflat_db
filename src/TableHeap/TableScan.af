@@ -21,10 +21,9 @@ unique class TableScan {
     if my.complete return;
     let heap = my.heap.view();
     while true {
-        let raw = match $(await heap.readRawPage(my.pageId)) {
-          Ok(&&value) => value,
-          Err => return NULL,
-        };
+        let raw_result = await heap.readRawPage(my.pageId);
+        if raw_result.isErr() return NULL;
+        let raw = $raw_result.expect("should read page");
 
         let page = slotted.open($raw).expect("should be open");
 

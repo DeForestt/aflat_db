@@ -269,12 +269,12 @@ export fn register() -> void {
             let initialized_raw = table_page.release();
             let __initialized = (run pager.writePage(initialized_raw))!;
 
-            let heap = new TableHeap($pager, table_page_id);
+            let heap = new TableHeap(pager, table_page_id);
             let id = (run heap.insert(encoded.data, encoded.size))!;
             heap.close();
 
             let reopened_pager = (run db.readDatabase(path))!;
-            let reopened_heap = new TableHeap($reopened_pager, table_page_id);
+            let reopened_heap = new TableHeap(reopened_pager, table_page_id);
             let persisted_record = (run reopened_heap.read(id))!;
             let decoded = row_codec.decode(schema, persisted_record)!;
 

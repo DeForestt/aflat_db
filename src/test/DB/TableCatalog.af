@@ -30,7 +30,7 @@ export fn register() -> void {
             let table_page = (run pager.allocatePage())!;
             const long table_page_id = table_page.id;
 
-            let catalog_heap = new TableHeap($pager, #1);
+            let catalog_heap = new TableHeap(pager, #1);
             let catalog = new Catalog($catalog_heap);
             let columns = new vector::<ColumnSchema>(0);
             let schema = new TableSchema(
@@ -42,7 +42,7 @@ export fn register() -> void {
             catalog.close();
 
             let reopened_pager = (run db.readDatabase(path))!;
-            let reopened_heap = new TableHeap($reopened_pager, #1);
+            let reopened_heap = new TableHeap(reopened_pager, #1);
             let reopened_catalog = new Catalog($reopened_heap);
 
             let found = (run reopened_catalog.findTable("users", 5))!;
@@ -60,7 +60,7 @@ export fn register() -> void {
             const long teams_page_id = teams_page.id;
             const long users_page_id = users_page.id;
 
-            let catalog_heap = new TableHeap($pager, #1);
+            let catalog_heap = new TableHeap(pager, #1);
             let catalog = new Catalog($catalog_heap);
             let teams = tableCatalogTestEntry("teams", teams_page_id);
             let users = tableCatalogTestEntry("users", users_page_id);
@@ -71,7 +71,7 @@ export fn register() -> void {
 
             test.assertEqual(users_page_id, found.firstPage);
             test.assertEqual(5, found.name.len());
-            let found_schema = found.schema.release();
+            let found_schema = $found.getSchema();
             test.assertEqual(5, found_schema.name.len());
             test.assertEqual(0, found_schema.columnCount());
             catalog.close();

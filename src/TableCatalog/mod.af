@@ -18,7 +18,7 @@ unique class TableCatalogEntry {
     return my;
   };
 
-  fn getSchema() -> TableSchema {
+  sink fn getSchema() -> TableSchema {
     let schema = $my.schema;
     return $schema.release();
   }

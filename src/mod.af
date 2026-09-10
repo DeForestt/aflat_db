@@ -24,7 +24,7 @@ unique class Database {
       return my.pager.catalogPage();
     };
 
-    async fn table(immutable uni_string name) -> Table! {
+    async fn table(uni_string &&name) -> Table! {
       let catalog_heap = new TableHeap(my.pager, my.catalogPage());
 
       let catalog = new Catalog($catalog_heap);
@@ -32,7 +32,7 @@ unique class Database {
       let entry = (await catalog.findTable(name.cstr(), name.len()))!;
 
       let table_heap = new TableHeap(my.pager, entry.firstPage);
-      let table_schema = entry.getSchema();
+      let table_schema = $entry.getSchema();
 
       let tab = new Table($table_heap, $table_schema, new vector::<Index>());
 
@@ -80,7 +80,7 @@ unique class Database {
         let __added = (await catalog.addTable(entry))!;
 
         // Take the schema back out for the live Table object.
-        let table_schema = entry.getSchema();
+        let table_schema = $entry.getSchema();
 
         let table_heap = new TableHeap(
             my.pager,

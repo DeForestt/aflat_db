@@ -32,7 +32,7 @@ export fn register() -> void {
             let initialized_raw = page.release();
             let __initialized = (run pager.writePage(initialized_raw))!;
 
-            let heap = new TableHeap($pager, #1);
+            let heap = new TableHeap(pager, #1);
             let id = (run heap.insert("hello", 5))!;
 
             test.assertEqual(#1, id.pageId);
@@ -70,7 +70,7 @@ export fn register() -> void {
             let initialized_raw = page.release();
             let __initialized = (run pager.writePage(initialized_raw))!;
 
-            let heap = new TableHeap($pager, #1);
+            let heap = new TableHeap(pager, #1);
             let deleted_id = (run heap.insert(bytes, large_size))!;
 
             cursor = bytes;
@@ -146,7 +146,7 @@ export fn register() -> void {
             let initialized_raw = page.release();
             let __initialized = (run pager.writePage(initialized_raw))!;
 
-            let heap = new TableHeap($pager, #1);
+            let heap = new TableHeap(pager, #1);
             let first_id = (run heap.insert(full_record, full_record_size))!;
             let overflow_id = (run heap.insert("overflow", 8))!;
             let followed_id = (run heap.insert("follow", 6))!;
@@ -273,7 +273,7 @@ export fn register() -> void {
             let initialized_raw = page.release();
             let __initialized = (run pager.writePage(initialized_raw))!;
 
-            let heap = new TableHeap($pager, #1);
+            let heap = new TableHeap(pager, #1);
             let first_id = (run heap.insert(full_record, full_record_size))!;
             let overflow_id = (run heap.insert("overflow", 8))!;
             let followed_id = (run heap.insert("follow", 6))!;
@@ -301,7 +301,7 @@ export fn register() -> void {
             let initialized_raw = page.release();
             let __initialized = (run pager.writePage(initialized_raw))!;
 
-            let heap = new TableHeap($pager, #1);
+            let heap = new TableHeap(pager, #1);
             let id = (run heap.insert("old", 3))!;
             let retained_id = (run heap.insert("keep", 4))!;
 
@@ -336,7 +336,7 @@ export fn register() -> void {
             let initialized_raw = page.release();
             let __initialized = (run pager.writePage(initialized_raw))!;
 
-            let heap = new TableHeap($pager, #1);
+            let heap = new TableHeap(pager, #1);
             let id = (run heap.insert("delete me", 9))!;
 
             test.assertTrue((run heap.remove(id))!);

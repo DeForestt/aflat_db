@@ -171,7 +171,7 @@ export fn decode(immutable TableSchema schema, immutable Record record) -> Row! 
       cursor = cursor + 1;
       remaining = remaining - 1;
 
-      let column = schema.column(i)!.view();
+      let column = schema.column(i)!;
       if is_null {
         if !column.nullable {
           return new Error("Null value in non-nullable column");

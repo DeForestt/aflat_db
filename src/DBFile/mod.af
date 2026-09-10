@@ -17,4 +17,6 @@ unique class DBHeader {
     af_memcpy(?my.magic, "AFLATDB", 8);
     return my;
   };
+
+  fn del() -> void {};
 };
