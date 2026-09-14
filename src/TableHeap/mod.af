@@ -9,7 +9,7 @@ import view from "Memory";
 import {loan} from "Memory" under box;
 
 unique class TableHeap {
-    private view::<Pager> pager = box.loan(pager);
+    private loan Pager pager = pager;
     private long firstPage = firstPage;
 
 
@@ -19,7 +19,7 @@ unique class TableHeap {
 
     async fn insert(immutable adr bytes, int size) -> RecordId! {
         const LockGuard __guard =
-            await my.pager.view().operationGuard();
+            await my.pager.operationGuard();
 
         if (size + 8) > (4096 - 16) {
           return new Error("Record is too large for a database page");
@@ -28,7 +28,7 @@ unique class TableHeap {
         mutable long page_id = my.firstPage;
 
         while true {
-          let raw = (await my.pager.view().readPage(page_id))!;
+          let raw = (await my.pager.readPage(page_id))!;
           let page = slotted.open($raw)!;
 
           // Existing page can take it.
@@ -36,7 +36,7 @@ unique class TableHeap {
             const int slot_id = page.insert(bytes, size)!;
 
             let updated = page.release();
-            let __ = (await my.pager.view().writePage(updated))!;
+            let __ = (await my.pager.writePage(updated))!;
             return new RecordId(page_id, slot_id);
           };
 
@@ -48,7 +48,7 @@ unique class TableHeap {
             const int slot_id = page.insert(bytes, size)!;
 
             let updated = page.release();
-            let __ = (await my.pager.view().writePage(updated))!;
+            let __ = (await my.pager.writePage(updated))!;
             return new RecordId(page_id, slot_id);
           };
 
@@ -59,14 +59,14 @@ unique class TableHeap {
             // room for this record. Persist it before following the link.
             if reclaimed > 0 {
               let compacted = page.release();
-              let __ = (await my.pager.view().writePage(compacted))!;
+              let __ = (await my.pager.writePage(compacted))!;
             };
             page_id = next_page;
             continue;
           };
 
           // End of the chain. Allocate another page.
-          let new_raw = (await my.pager.view().allocatePage())!;
+          let new_raw = (await my.pager.allocatePage())!;
           const long new_page_id = new_raw.id;
           let new_page = slotted.create($new_raw)!;
 
@@ -74,13 +74,13 @@ unique class TableHeap {
           page.setNextPage(new_page_id);
 
           let old_raw = page.release();
-          let __ = (await my.pager.view().writePage(old_raw))!;
+          let __ = (await my.pager.writePage(old_raw))!;
 
           // Insert into the new page.
           const int slot_id = new_page.insert(bytes, size)!;
 
           let updated_new_raw = new_page.release();
-          let __ = (await my.pager.view().writePage(updated_new_raw))!;
+          let __ = (await my.pager.writePage(updated_new_raw))!;
 
           return new RecordId(new_page_id, slot_id);
         };
@@ -88,9 +88,9 @@ unique class TableHeap {
 
     async fn read(immutable RecordId id) -> Record! {
         const LockGuard __guard =
-            await my.pager.view().operationGuard();
+            await my.pager.operationGuard();
 
-        let raw = (await my.pager.view().readPage(id.pageId))!;
+        let raw = (await my.pager.readPage(id.pageId))!;
         let page = slotted.open($raw)!;
         let record = page.read(id.slotId)!;
         return new Record(record);
@@ -102,15 +102,15 @@ unique class TableHeap {
 
     async fn removeAt(long pageId, int slotId) -> bool! {
         const LockGuard __guard =
-            await my.pager.view().operationGuard();
+            await my.pager.operationGuard();
 
-        let raw = (await my.pager.view().readPage(pageId))!;
+        let raw = (await my.pager.readPage(pageId))!;
         let page = slotted.open($raw)!;
 
         let __removed = page.remove(slotId)!;
 
         let updated = page.release();
-        let __ = (await my.pager.view().writePage(updated))!;
+        let __ = (await my.pager.writePage(updated))!;
 
         return true;
     };
@@ -121,23 +121,23 @@ unique class TableHeap {
 
     async fn updateAt(long pageId, int slotId, immutable adr bytes, int size) -> bool! {
       const LockGuard __guard =
-          await my.pager.view().operationGuard();
+          await my.pager.operationGuard();
 
-      let raw = (await my.pager.view().readPage(pageId))!;
+      let raw = (await my.pager.readPage(pageId))!;
       let page = slotted.open($raw)!;
 
       let __updated = page.update(slotId, bytes, size)!;
 
       let updated_raw = page.release();
-      let __written = (await my.pager.view().writePage(updated_raw))!;
+      let __written = (await my.pager.writePage(updated_raw))!;
 
       return true;
     };
 
     async fn readRawPage(long pageId) -> Page! {
       const LockGuard __guard =
-          await my.pager.view().operationGuard();
-      return await my.pager.view().readPage(pageId);
+          await my.pager.operationGuard();
+      return await my.pager.readPage(pageId);
     };
 
     fn scan() -> TableScan {
@@ -145,6 +145,10 @@ unique class TableHeap {
     };
 
     fn close() -> int {
-      return my.pager.view().close();
+      return my.pager.close();
     };
+
+    fn del() -> int {
+      return my.close();
+    }
 };

@@ -8,7 +8,7 @@ import {open, create} from "../Pager/SlottedPage" under slotted;
 import Record, RecordId from "../Record";
 
 unique class TableScan {
-  private view::<TableHeap> heap = box.loan(heap);
+  private loan TableHeap heap = heap;
   private mutable long pageId = firstPage;
   private mutable int slotId = 0;
   private mutable bool complete = false;
@@ -19,7 +19,7 @@ unique class TableScan {
 
   async fn next() -> HeapRecord? {
     if my.complete return;
-    let heap = my.heap.view();
+    let heap = my.heap;
     while true {
         let raw_result = await heap.readRawPage(my.pageId);
         if raw_result.isErr() return NULL;
@@ -54,4 +54,8 @@ unique class TableScan {
         my.slotId = 0;
     };
   };
+
+  fn del() {
+    return;
+  }
 };

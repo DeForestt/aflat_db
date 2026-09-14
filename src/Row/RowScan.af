@@ -1,16 +1,14 @@
 .needs <std>
 
 import TableSchema from "../Schemas";
-import view from "Memory";
 import TableScan from "../TableHeap/TableScan";
-import {loan} from "Memory" under box;
 import {decode} from "../Row/Codec" under row_codec;
 import {None} from "Utils/option" under opt;
 import TableRecord from "../Table/TableRecord";
 
 unique class RowScan {
     private TableScan scan = $scan;
-    private view::<TableSchema> schema = box.loan(schema);
+    private loan TableSchema schema = schema;
 
     fn init(
         TableScan &&scan,
@@ -33,7 +31,7 @@ unique class RowScan {
         const long page_id = heap_record.pageId;
         const int slot_id = heap_record.slotId;
 
-        let schema = my.schema.view();
+        let schema = my.schema;
 
         let row = row_codec.decode(
             schema,
