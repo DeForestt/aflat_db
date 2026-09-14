@@ -16,8 +16,7 @@ import {create} from "./Pager/SlottedPage" under slotted;
  */
 export async fn createPager(const adr path) -> Pager! {
     let file = fs.createFile(path)!;
-    let header = new DBHeader();
-    let pager = new Pager($file, $header);
+    let pager = new Pager($file);
     let catalog_page_raw = (await pager.allocatePage())!;
     let catalog_page = slotted.create($catalog_page_raw)!;
     let initialized_catalog_page = catalog_page.release();
@@ -31,8 +30,7 @@ export async fn createPager(const adr path) -> Pager! {
  */
 export async fn readDatabase(const adr path) -> Pager! {
     let file = fs.openFile(path)!;
-    let header = new DBHeader();
-    let pager = new Pager($file, $header);
+    let pager = new Pager($file);
   
     let header_result = await pager.readHeader();
     if header_result.isErr() {
