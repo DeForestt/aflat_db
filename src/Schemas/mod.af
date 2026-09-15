@@ -7,7 +7,7 @@ import IndexSchema from "../Index";
 
 unique class ColumnSchema {
     local uni_string name = $name;
-    local DBType type = $type;
+    DBType type = $type;
     bool nullable = nullable;
 
     fn init(uni_string &&name, DBType &&type, bool nullable) -> Self {
@@ -17,8 +17,8 @@ unique class ColumnSchema {
 
 unique class TableSchema {
     local uni_string name = $name;
-    local vector::<ColumnSchema> columns = $columns;
-    local vector::<IndexSchema> indexes = $indexes;
+    vector::<ColumnSchema> columns = $columns;
+    vector::<IndexSchema> indexes = $indexes;
 
     fn init(uni_string &&name, vector::<ColumnSchema> &&columns, vector::<IndexSchema> &&indexes) -> Self {
         return my;
