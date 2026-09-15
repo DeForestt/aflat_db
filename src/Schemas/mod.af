@@ -6,7 +6,7 @@ import view from "Memory";
 import IndexSchema from "../Index";
 
 unique class ColumnSchema {
-    local uni_string name = $name;
+    uni_string name = $name;
     local DBType type = $type;
     bool nullable = nullable;
 
@@ -16,7 +16,7 @@ unique class ColumnSchema {
 };
 
 unique class TableSchema {
-    local uni_string name = $name;
+    uni_string name = $name;
     vector::<ColumnSchema> columns = $columns;
     vector::<IndexSchema> indexes = $indexes;
 
