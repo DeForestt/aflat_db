@@ -148,7 +148,7 @@ unique class TableHeap {
       return my.pager.close();
     };
 
-    fn del() -> int {
-      return my.close();
-    }
+    fn del() {
+      return;
+    };
 };
