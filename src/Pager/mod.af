@@ -9,12 +9,11 @@ import AsyncLock, LockGuard from "concurrency";
 
 unique class Pager {
   private File file = $file;
-  private local mutable DBHeader header;
+  private local mutable DBHeader header = DBHeader();
   private mutable bool allocating = false;
   private AsyncLock operationLock = new AsyncLock();
   
   fn init(File &&file) {
-    my.header.init();
     return my;
   };
 
