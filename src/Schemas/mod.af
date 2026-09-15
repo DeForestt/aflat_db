@@ -7,7 +7,7 @@ import IndexSchema from "../Index";
 
 unique class ColumnSchema {
     local uni_string name = $name;
-    DBType type = $type;
+    local DBType type = $type;
     bool nullable = nullable;
 
     fn init(uni_string &&name, DBType &&type, bool nullable) -> Self {
