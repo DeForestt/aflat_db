@@ -1,6 +1,8 @@
 .needs <std>
 .needs <test>
 
+import IndexSchema from "../../../Index";
+
 import {describe, it, assertEqual, assertTrue} from "ATest" under test;
 import {createPager, readDatabase} from "../../../Storage" under db;
 import SlottedPage from "../../../Pager/SlottedPage";
@@ -35,7 +37,8 @@ fn rowCodecOneColumnSchema(DBType &&type, bool nullable) -> TableSchema {
     let columns = new vector::<ColumnSchema>(1);
     columns.push_back(new ColumnSchema(
         new uni_string("value"), $type, nullable));
-    let schema = new TableSchema(new uni_string("single"), $columns);
+    let schema = new TableSchema(
+        new uni_string("single"), $columns, new vector::<IndexSchema>());
     return schema;
 };
 
@@ -77,7 +80,7 @@ export fn register() -> void {
             columns.push_back(new ColumnSchema(
                 new uni_string("note"), db_type.Text(), true));
             let schema = new TableSchema(
-                new uni_string("users"), $columns);
+                new uni_string("users"), $columns, new vector::<IndexSchema>());
 
             let values = new vector::<DBValue>(6);
             values.push_back(db_value.Int(42));
@@ -209,7 +212,7 @@ export fn register() -> void {
             columns.push_back(new ColumnSchema(
                 new uni_string("punctuation"), db_type.Text(), false));
             let schema = new TableSchema(
-                new uni_string("text_values"), $columns);
+                new uni_string("text_values"), $columns, new vector::<IndexSchema>());
 
             let values = new vector::<DBValue>(3);
             values.push_back(db_value.Text(new uni_string("")));
@@ -252,7 +255,8 @@ export fn register() -> void {
                 new uni_string("name"), db_type.Text(), false));
             columns.push_back(new ColumnSchema(
                 new uni_string("active"), db_type.Bool(), false));
-            let schema = new TableSchema(new uni_string("users"), $columns);
+            let schema = new TableSchema(
+                new uni_string("users"), $columns, new vector::<IndexSchema>());
 
             let values = new vector::<DBValue>(3);
             values.push_back(db_value.Int(42));

@@ -9,14 +9,15 @@ import Catalog, TableCatalogEntry from "../../TableCatalog";
 import TableSchema, ColumnSchema from "../../Schemas";
 import vector from "Collections/Vector";
 import uni_string from "uni_string";
-import IndexMetadata from "../../Index";
+import IndexMetadata, IndexSchema from "../../Index";
 
 fn tableCatalogTestEntry(
     immutable adr name,
     long first_page
 ) -> TableCatalogEntry {
     let columns = new vector::<ColumnSchema>(0);
-    let schema = new TableSchema(new uni_string(name), $columns);
+    let schema = new TableSchema(
+        new uni_string(name), $columns, new vector::<IndexSchema>());
     return new TableCatalogEntry(
         new uni_string(name), first_page, $schema,
         new vector::<IndexMetadata>());
@@ -34,7 +35,7 @@ export fn register() -> void {
             let catalog = new Catalog($catalog_heap);
             let columns = new vector::<ColumnSchema>(0);
             let schema = new TableSchema(
-                new uni_string("users"), $columns);
+                new uni_string("users"), $columns, new vector::<IndexSchema>());
             let entry = new TableCatalogEntry(
                 new uni_string("users"), table_page_id, $schema,
                 new vector::<IndexMetadata>());

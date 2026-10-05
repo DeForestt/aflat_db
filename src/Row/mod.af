@@ -18,7 +18,7 @@ unique class Row {
     return my.values.get(i).toResult("Failed To find Expected DBValue");
   };
 
-  fn next() -> &DBValue? {
+  fn next() -> local &DBValue? {
     return my.values.next();
   };
 };

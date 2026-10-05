@@ -1,4 +1,6 @@
 .needs <std>
+import vector from "Collections/Vector";
+import IndexSchema from "../src/Index";
 
 import {print} from "uni_string" under uni;
 import {createDatabase, openDatabase} from "../src/mod" under db;
@@ -20,7 +22,7 @@ async fn main() -> int {
         new ColumnSchema(`active`, db_type.Bool(), false),
     ];
 
-    let schema = new TableSchema(`users`, $columns);
+    let schema = new TableSchema(`users`, $columns, new vector::<IndexSchema>());
 
     let users = (await database.createTable($schema))
         .expect("unable to create users table");

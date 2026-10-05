@@ -8,7 +8,7 @@ import {Int, Long, Float, Bool, Text} from "../../../Schemas/Types" under db_typ
 import {encodedSize, encode, decode} from "../../../TableCatalog/EntryCodec" under codec;
 import vector from "Collections/Vector";
 import uni_string from "uni_string";
-import IndexMetadata from "../../../Index";
+import IndexMetadata, IndexSchema from "../../../Index";
 
 fn catalogCodecBytesEqual(
     immutable adr actual,
@@ -35,7 +35,8 @@ fn catalogCodecUsersEntry() -> TableCatalogEntry {
         new uni_string("id"), db_type.Int(), false));
     columns.push_back(new ColumnSchema(
         new uni_string("name"), db_type.Text(), true));
-    let schema = new TableSchema(new uni_string("users"), $columns);
+    let schema = new TableSchema(
+        new uni_string("users"), $columns, new vector::<IndexSchema>());
 
     return new TableCatalogEntry(
         new uni_string("users"), #42, $schema,
@@ -54,7 +55,8 @@ fn catalogCodecAllTypesEntry() -> TableCatalogEntry {
         new uni_string("active"), db_type.Bool(), false));
     columns.push_back(new ColumnSchema(
         new uni_string("name"), db_type.Text(), true));
-    let schema = new TableSchema(new uni_string("all_types"), $columns);
+    let schema = new TableSchema(
+        new uni_string("all_types"), $columns, new vector::<IndexSchema>());
 
     const long first_page = #9876543 * #1000;
     return new TableCatalogEntry(
@@ -71,7 +73,7 @@ export fn register() -> void {
 
             const int written = codec.encode(entry, bytes)!;
 
-            test.assertEqual(45, size);
+            test.assertEqual(49, size);
             test.assertEqual(size, written);
             af_free(bytes);
         });
@@ -82,9 +84,9 @@ export fn register() -> void {
             const adr actual = af_malloc(size);
             const int written = codec.encode(entry, actual)!;
 
-            const adr expected = af_malloc(45);
+            const adr expected = af_malloc(49);
             mutable adr expected_cursor = expected;
-            for int i = 0; i < 45; i++ {
+            for int i = 0; i < 49; i++ {
                 expected_cursor =: '\0';
                 expected_cursor = expected_cursor + 1;
             };
@@ -115,8 +117,8 @@ export fn register() -> void {
             const bool name_nullable = true;
             af_memcpy(expected + 44, ?name_nullable, 1);
 
-            test.assertEqual(45, written);
-            test.assertTrue(catalogCodecBytesEqual(actual, expected, 45));
+            test.assertEqual(49, written);
+            test.assertTrue(catalogCodecBytesEqual(actual, expected, 49));
 
             af_free(expected);
             af_free(actual);
@@ -168,6 +170,70 @@ export fn register() -> void {
             test.assertTrue(name.type.isText());
             test.assertTrue(name.nullable == true);
 
+            af_free(bytes);
+        });
+
+        test.it("reads legacy entries without index metadata", fn () {
+            let entry = catalogCodecUsersEntry();
+            const adr bytes = af_malloc(codec.encodedSize(entry));
+            let __written = codec.encode(entry, bytes)!;
+            let decoded = codec.decode(bytes, 45)!;
+            test.assertEqual(0, decoded.indexes.count());
+            let schema = $decoded.getSchema();
+            test.assertEqual(0, schema.indexes.count());
+            test.assertEqual(2, schema.columnCount());
+            af_free(bytes);
+        });
+
+        test.it("round trips index metadata and rejects malformed indexes", fn () {
+            let entry = catalogCodecUsersEntry();
+            const long expected_root_page = #9876543 * #1000;
+            entry.indexes.push_back(new IndexMetadata(
+                new IndexSchema(new uni_string("id_idx"), 0, true), expected_root_page));
+            entry.indexes.push_back(new IndexMetadata(
+                new IndexSchema(new uni_string("name_idx"), 1, false), #43));
+            const int size = codec.encodedSize(entry);
+            const adr bytes = af_malloc(size + 1);
+            test.assertEqual(size, codec.encode(entry, bytes)!);
+            let decoded = codec.decode(bytes, size)!;
+            test.assertEqual(2, decoded.indexes.count());
+            let first = decoded.indexes.get(0).expect("expected index");
+            test.assertEqual(expected_root_page, first.rootPage);
+            let first_schema = first.getSchema();
+            test.assertEqual(0, first_schema.column);
+            test.assertTrue(first_schema._unique);
+            test.assertTrue(catalogCodecBytesEqual(first_schema.name.cstr(), "id_idx", 6));
+            let second = decoded.indexes.get(1).expect("expected index");
+            test.assertEqual(#43, second.rootPage);
+            test.assertTrue(!second.getSchema()._unique);
+            let schema = $decoded.getSchema();
+            test.assertEqual(2, schema.indexes.count());
+            let index_schema = schema.indexes.get(1).expect("expected index schema");
+            test.assertEqual(1, index_schema.column);
+            test.assertTrue(catalogCodecBytesEqual(index_schema.name.cstr(), "name_idx", 8));
+
+            for int length = 46; length < size; length++ {
+                test.assertTrue(codec.decode(bytes, length).isErr());
+            };
+            (bytes + size) =: '\0';
+            test.assertTrue(codec.decode(bytes, size + 1).isErr());
+
+            const int invalid_column = 2;
+            af_memcpy(bytes + 59, ?invalid_column, 4);
+            test.assertTrue(codec.decode(bytes, size).isErr());
+            const int column = 0;
+            af_memcpy(bytes + 59, ?column, 4);
+            const int invalid_unique = 2;
+            af_memcpy(bytes + 63, ?invalid_unique, 1);
+            test.assertTrue(codec.decode(bytes, size).isErr());
+            const int valid_unique = 1;
+            af_memcpy(bytes + 63, ?valid_unique, 1);
+            const int invalid_name_length = -1;
+            af_memcpy(bytes + 49, ?invalid_name_length, 4);
+            test.assertTrue(codec.decode(bytes, size).isErr());
+            const int invalid_count = -1;
+            af_memcpy(bytes + 45, ?invalid_count, 4);
+            test.assertTrue(codec.decode(bytes, size).isErr());
             af_free(bytes);
         });
 

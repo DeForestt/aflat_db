@@ -5,7 +5,7 @@ import {fromTypeTag} from "../Schemas/Types" under db_type;
 import Error from "Utils/Error";
 import vector from "Collections/Vector";
 import uni_string from "uni_string";
-import IndexMetadata from "../Index";
+import IndexMetadata, IndexSchema from "../Index";
 
 export fn encodedSize(
     immutable TableCatalogEntry entry
@@ -23,6 +23,14 @@ export fn encodedSize(
         size = size + column.name.len();   // column name
         size = size + 4;                          // type tag
         size = size + 1;                          // nullable
+    };
+
+    size = size + 4;                  // index count
+
+    foreach index in entry.indexes {
+      immutable let index_schema = index.getSchema();
+      size = size + 4 + index_schema.name.len(); // index name
+      size = size + 4 + 1 + 8;          // column, unique, root page
     };
 
     return size;
@@ -69,6 +77,29 @@ export fn encode(immutable TableCatalogEntry schema, mutable adr cursor) -> int!
     cursor = cursor + 1;
   };
   
+  let index_count = schema.indexes.count();
+  af_memcpy(cursor, ?index_count, 4);
+  cursor = cursor + 4;
+
+  foreach index in schema.indexes {
+    immutable let index_schema = index.getSchema();
+    let name_length = index_schema.name.len();
+    af_memcpy(cursor, ?name_length, 4);
+    cursor = cursor + 4;
+    af_memcpy(cursor, index_schema.name.cstr(), name_length);
+    cursor = cursor + name_length;
+
+    let column = index_schema.column;
+    af_memcpy(cursor, ?column, 4);
+    cursor = cursor + 4;
+    let is_unique = index_schema._unique;
+    af_memcpy(cursor, ?is_unique, 1);
+    cursor = cursor + 1;
+    let root_page = index.rootPage;
+    af_memcpy(cursor, ?root_page, 8);
+    cursor = cursor + 8;
+  };
+
   // added the 0 here to force it to be treated as a `number` which is valid as an int return.
   return 0 + cursor - start;
 };
@@ -167,15 +198,74 @@ export fn decode(immutable adr bytes, int size) -> TableCatalogEntry! {
       $column_name, $column_type, nullable));
   };
 
+  let indexes = new vector::<IndexMetadata>();
+  let index_schemas = new vector::<IndexSchema>();
+  // Older entries end after the columns and have no index metadata.
+  if remaining != 0 {
+    if remaining < 4 {
+      return new Error("Truncated index count");
+    };
+    int index_count = 0;
+    af_memcpy(?index_count, cursor, 4);
+    cursor = cursor + 4;
+    remaining = remaining - 4;
+    if (index_count < 0) | (index_count > remaining / 17) {
+      return new Error("Invalid index count");
+    };
+
+    for int i = 0; i < index_count; i++ {
+      if remaining < 4 {
+        return new Error("Truncated index name length");
+      };
+      int name_length = 0;
+      af_memcpy(?name_length, cursor, 4);
+      cursor = cursor + 4;
+      remaining = remaining - 4;
+      if (name_length < 0) | (name_length > remaining - 13) {
+        return new Error("Truncated index metadata");
+      };
+
+      let name_bytes = af_malloc(name_length + 1);
+      af_memcpy(name_bytes, cursor, name_length);
+      (name_bytes + name_length) =: '\0';
+      let index_name = new uni_string(name_bytes);
+      af_free(name_bytes);
+      cursor = cursor + name_length;
+      remaining = remaining - name_length;
+
+      int column = 0;
+      af_memcpy(?column, cursor, 4);
+      cursor = cursor + 4;
+      int unique_flag = 0;
+      af_memcpy(?unique_flag, cursor, 1);
+      cursor = cursor + 1;
+      long root_page = 0;
+      af_memcpy(?root_page, cursor, 8);
+      cursor = cursor + 8;
+      remaining = remaining - 13;
+      if (column < 0) | (column >= column_count) {
+        return new Error("Invalid index column");
+      };
+      if (unique_flag != 0) & (unique_flag != 1) {
+        return new Error("Invalid index unique flag");
+      };
+      let is_unique = unique_flag == 1;
+      index_schemas.push_back(new IndexSchema(
+        new uni_string(index_name.cstr()), column, is_unique));
+      indexes.push_back(new IndexMetadata(
+        new IndexSchema($index_name, column, is_unique), root_page));
+    };
+  };
+
   if remaining != 0 {
     return new Error("Trailing table catalog bytes");
   };
 
   let schema = new TableSchema(
-    new uni_string(table_name.cstr()), $columns);
+    new uni_string(table_name.cstr()), $columns, $index_schemas);
   let entry = new TableCatalogEntry(
     new uni_string(table_name.cstr()), first_page, $schema,
-    new vector::<IndexMetadata>());
+    $indexes);
   return entry;
 
 };

@@ -12,6 +12,7 @@ import {Int, Text, Bool} from "../../../DBValue" under db_value;
 import Row from "../../../Row";
 import RecordId from "../../../Record";
 import vector from "Collections/Vector";
+import IndexSchema from "../../../Index";
 import uni_string from "uni_string";
 
 fn databaseTestSchema(immutable adr name) -> TableSchema {
@@ -22,7 +23,7 @@ fn databaseTestSchema(immutable adr name) -> TableSchema {
         new uni_string("name"), db_type.Text(), false));
     columns.push_back(new ColumnSchema(
         new uni_string("active"), db_type.Bool(), false));
-    return new TableSchema(new uni_string(name), $columns);
+    return new TableSchema(new uni_string(name), $columns, new vector::<IndexSchema>());
 };
 
 fn databaseTestRow(int id, immutable adr name, bool active) -> Row {

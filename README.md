@@ -27,6 +27,8 @@ import {Int, Text, Bool} from "./aflat_db/Schemas/Types" under db_type;
 import DBValue from "./aflat_db/DBValue";
 import {Int, Text, Bool} from "./aflat_db/DBValue" under db_value;
 import Row from "./aflat_db/Row";
+import IndexSchema from "./aflat_db/Index";
+import vector from "Collections/Vector";
 ```
 
 Create a database and a typed table:
@@ -41,7 +43,7 @@ let columns = [
     new ColumnSchema(`active`, db_type.Bool(), false),
 ];
 
-let schema = new TableSchema(`users`, $columns);
+let schema = new TableSchema(`users`, $columns, new vector::<IndexSchema>());
 let users = (await database.createTable($schema))
     .expect("unable to create users table");
 
